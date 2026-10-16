@@ -466,20 +466,23 @@
     const prefKey = `zl.money.${cid()}`;
     let last = null;
     try { last = localStorage.getItem(prefKey); } catch (_) { /* ignore */ }
-    const bank = (money.find((a) => a.id === last) || money.find((a) => a.code === "1131") || money[0]).id;
+    // A bank statement line fixes the date, amount and account; the receipt is matched to it.
+    const BL = preset.bankLine || null;
+    const bank = BL ? BL.account_id : (money.find((a) => a.id === last) || money.find((a) => a.code === "1131") || money[0]).id;
     const numFields = ZL.numbering.fields(numRows, seriesKind(type), bank);
     const inward = type === "RECEIPT" || type === "SUPPLIER_REFUND";
     const f = (label, control, cls = "") => `<label class="zl-field ${cls}"><span>${label}</span>${control}</label>`;
     const body = `
+      ${BL ? `<p class="hint" style="margin:0 0 10px">From the bank statement: ${ZL.date(BL.date)} · <b>RM ${M(preset.amount)}</b> — ${E(BL.description || "")}. Posting matches it to this line.${inward ? " If the bank took a charge, enter it; the receipt is for the amount before charges." : ""}</p>` : ""}
       <div class="zl-dochead">
         ${f(`${S.Who} <i aria-hidden="true">*</i>`, `<select class="zl-input" name="contact"><option value="">Choose ${S.who}…</option>${people.filter((p) => p.is_active).map((p) => opt(p.id, `${p.name} · ${p.code}`, preset.contact_id)).join("")}</select>`, "wide")}
-        ${f('Date <i aria-hidden="true">*</i>', `<input class="zl-input" type="date" name="date" value="${E(ZL.today())}">`)}
-        ${f('Amount <i aria-hidden="true">*</i>', `<div class="zl-amount"><span>RM</span><input class="zl-input num" name="amount" inputmode="decimal" placeholder="0.00" value="${E(preset.amount ? M(preset.amount) : "")}"></div>`)}
-        ${f(inward ? "Received into" : "Paid from", `<select class="zl-input" name="money">${money.map((a) => opt(a.id, `${a.name} · ${a.code}`, bank)).join("")}</select>`, "wide")}
+        ${f('Date <i aria-hidden="true">*</i>', `<input class="zl-input" type="date" name="date" value="${E(BL ? BL.date : ZL.today())}"${BL ? " disabled" : ""}>`)}
+        ${f('Amount <i aria-hidden="true">*</i>', `<div class="zl-amount"><span>RM</span><input class="zl-input num" name="amount" inputmode="decimal" placeholder="0.00" value="${E(preset.amount ? M(preset.amount) : "")}"${BL ? " disabled" : ""}></div>`)}
+        ${f(inward ? "Received into" : "Paid from", `<select class="zl-input" name="money"${BL ? " disabled" : ""}>${money.map((a) => opt(a.id, `${a.name} · ${a.code}`, bank)).join("")}</select>`, "wide")}
         ${f(inward ? "Received by" : "Paid by", `<select class="zl-input" name="method">${METHODS.map((m) => opt(m, m, "Bank transfer")).join("")}</select>`)}
         ${f("Bank charges", `<div class="zl-amount"><span>RM</span><input class="zl-input num" name="charge" inputmode="decimal" placeholder="0.00"></div>`)}
-        ${f("Cheque / reference no.", `<input class="zl-input" name="reference" maxlength="60" placeholder="Optional">`)}
-        ${f("Description", `<input class="zl-input" name="description" maxlength="500" placeholder="Optional">`, "wide")}
+        ${f("Cheque / reference no.", `<input class="zl-input" name="reference" maxlength="60" placeholder="Optional" value="${E(BL && BL.reference ? BL.reference.slice(0, 60) : "")}"${BL ? " disabled" : ""}>`)}
+        ${f("Description", `<input class="zl-input" name="description" maxlength="500" placeholder="Optional" value="${E(BL && BL.description ? BL.description.slice(0, 500) : "")}">`, "wide")}
         ${numFields.map((x) => `<label class="zl-field"><span>${E(x.label)}</span>${x.type === "select"
           ? `<select class="zl-input" name="${x.name}">${x.options.map((o) => opt(o.value, o.label, x.value)).join("")}</select>`
           : `<input class="zl-input" name="${x.name}" value="${E(x.value)}">`}</label>`).join("")}
@@ -488,7 +491,7 @@
         <button type="button" class="zl-btn sm ghost" id="zl-auto">Apply oldest first</button></div>
       <div id="zl-open" class="zl-lines-wrap"></div>
       <div class="zl-totals" id="zl-ptot" style="margin-top:8px"></div>`;
-    let open = [], result = null, cap = null;
+    let open = [], result = null, capEv = null;
     const m = ZL.modal({ title: t.effect === -1 ? (t.side === "AR" ? "Receive payment" : "Pay supplier") : `Record ${t.label.toLowerCase()}`, wide: true, body,
       actions: [{ label: "Cancel" }, { label: `Post ${t.label.toLowerCase()}`, primary: true, onClick: async ({ root, close }) => {
         const v = (n) => root.querySelector(`[name="${n}"]`).value.trim();
@@ -500,23 +503,37 @@
           .filter((a) => a.amount);
         if (allocs.some((a) => Number.isNaN(a.amount))) throw bad("Knock-off amounts must be numbers.");
         const applied = allocs.reduce((s, a) => s + ZL.cents(a.amount), 0);
-        if (applied > ZL.cents(amount)) throw bad(`You applied ${M(applied / 100)}, more than the ${M(amount)} ${inward ? "received" : "paid"}.`);
+        const cap = ZL.cents(amount) + (BL ? (inward ? 1 : -1) * ZL.cents(charge || 0) : 0);
+        if (applied > cap) throw bad(`You applied ${M(applied / 100)}, more than the ${M(cap / 100)} ${inward ? "received" : "paid"}.`);
         const num = numCtl ? numCtl.read() : {};
+        if (BL) {
+          const r = await ZL.rpc("settle_from_bank_line", { p_line: BL.id, p_contact: v("contact"), p_allocations: allocs, p_bank_charge: charge || 0,
+            p_series: num.p_series || null, p_doc_no: num.p_doc_no || null, p_description: v("description") || null });
+          if (capEv) await capEv.link("TRADE_DOC", r.id);
+          result = r; close();
+          return;
+        }
         const r = await ZL.rpc("save_trade_doc", { p_company: cid(), p_id: null, p_doc: { doc_type: type, contact_id: v("contact"), date: v("date"),
           amount, bank_charge: charge || 0, money_account_id: v("money"), pay_method: v("method"), reference: v("reference"), description: v("description") },
           p_lines: [], p_post: true, p_series: num.p_series || null, p_doc_no: num.p_doc_no || null, p_allocations: allocs });
         try { localStorage.setItem(prefKey, v("money")); } catch (_) { /* ignore */ }
-        if (cap) await cap.link("TRADE_DOC", r.id);
+        if (capEv) await capEv.link("TRADE_DOC", r.id);
         result = r; close();
       } }],
-      onClose: () => { if (result) { ZL.toast(`${t.label} ${result.doc_no} posted (${result.reference}).`); ZL.open("tradedoc", { id: result.id }); } } });
+      onClose: () => {
+        if (preset.onDone) { preset.onDone(result); return; }
+        if (result) { ZL.toast(`${t.label} ${result.doc_no} posted (${result.reference}).`); ZL.open("tradedoc", { id: result.id }); }
+      } });
     const root = m.root;
     const numCtl = numFields.length ? ZL.numbering.wire(root, numRows, seriesKind(type), { dateInput: root.querySelector('[name="date"]'),
       moneyInput: root.querySelector('[name="money"]'), money: () => root.querySelector('[name="money"]').value }) : null;
     const want = -t.effect; // receipts settle charges (+1); refunds settle credits (−1)
     const amountInp = root.querySelector('[name="amount"]');
+    const chargeInp = root.querySelector('[name="charge"]');
+    // On a bank line the amount is what hit the bank; charges sit on top of a receipt and come out of a payment.
+    const usable = () => ZL.cents(ZL.parseAmount(amountInp.value) || 0) + (BL ? (inward ? 1 : -1) * ZL.cents(ZL.parseAmount(chargeInp.value) || 0) : 0);
     const tot = () => {
-      const amt = ZL.parseAmount(amountInp.value) || 0;
+      const amt = usable() / 100;
       const applied = [...root.querySelectorAll("[data-apply]")].reduce((s, i) => s + ZL.cents(ZL.parseAmount(i.value) || 0), 0) / 100;
       const left = r2(amt - applied);
       root.querySelector("#zl-ptot").innerHTML = `<span>Applied</span><b>${M(applied)}</b>
@@ -544,7 +561,7 @@
     amountInp.addEventListener("input", tot);
     amountInp.addEventListener("blur", () => { const v = ZL.parseAmount(amountInp.value); if (!Number.isNaN(v) && v) amountInp.value = M(v); });
     root.querySelector("#zl-auto").addEventListener("click", () => {
-      let left = ZL.cents(ZL.parseAmount(amountInp.value) || 0);
+      let left = usable();
       const inputs = [...root.querySelectorAll("[data-apply]")];
       if (!left) { // no amount yet: settle everything and make that the amount
         inputs.forEach((i) => { i.value = M(i.dataset.max); left += ZL.cents(i.dataset.max); });
@@ -552,14 +569,16 @@
       } else inputs.forEach((i) => { const take = Math.min(left, ZL.cents(i.dataset.max)); i.value = take ? M(take / 100) : ""; left -= take; });
       tot();
     });
+    chargeInp.addEventListener("input", tot);
     await loadOpen();
+    if (preset.autoApply) root.querySelector("#zl-auto").click();
 
     // A payment slip, transfer screenshot or cheque: read it, knock off what it names.
     if (ZL.capture) {
       const C = ZL.capture;
       const cSel = root.querySelector('[name="contact"]');
       const choose = async (c) => { C.put(root, "contact", c.id, { silent: true }); preset.apply = null; await loadOpen(); };
-      cap = C.evidence(m, { preset: preset.attachment, fill: async (s, att, ev) => {
+      capEv = C.evidence(m, { preset: preset.attachment, fill: async (s, att, ev) => {
         const c = C.matchContact(s.counterparty, people);
         if (c) await choose(c);
         else if (s.counterparty && s.counterparty.name) {
@@ -573,11 +592,13 @@
             return true;
           } });
         }
-        C.put(root, "date", s.date);
-        if (s.total != null) C.put(root, "amount", M(Math.abs(s.total)));
+        if (!BL) { // a bank line already fixes these
+          C.put(root, "date", s.date);
+          if (s.total != null) C.put(root, "amount", M(Math.abs(s.total)));
+          C.put(root, "money", C.moneyFor(s, money));
+          C.put(root, "reference", (s.payment_reference || s.doc_no || "").slice(0, 60));
+        }
         C.put(root, "method", C.methodFor(s));
-        C.put(root, "money", C.moneyFor(s, money));
-        C.put(root, "reference", (s.payment_reference || s.doc_no || "").slice(0, 60));
         C.put(root, "description", s.summary);
         const want = (s.references_paid || []).map((x) => String(x).toUpperCase().replace(/[^A-Z0-9]/g, "")).filter(Boolean);
         const key = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");

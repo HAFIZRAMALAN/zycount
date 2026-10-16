@@ -301,6 +301,34 @@
     });
   }
 
+  // Money in from a customer (or out to a supplier): post the receipt or payment, knock off
+  // the invoices it pays, and match the line — the best guess is filled in.
+  async function settleLine(line) {
+    const [[st], list] = await Promise.all([
+      ZL.select("bank_statements", "account_id", (q) => q.eq("id", line.statement_id)),
+      ZL.rpc("bank_line_suggestions", { p_line: line.id }).catch(() => []),
+    ]);
+    const amount = Math.abs(line.amount), top = list[0];
+    const preset = { amount, bankLine: { id: line.id, date: line.date, account_id: st && st.account_id, description: line.description, reference: line.reference } };
+    if (top) {
+      preset.contact_id = top.contact_id;
+      const named = list.filter((s) => s.contact_id === top.contact_id && /number|reference/.test(s.why));
+      if (ZL.cents(top.outstanding) === ZL.cents(amount)) preset.apply = { [top.doc_id]: amount };
+      else if (named.length) {
+        let left = ZL.cents(amount);
+        preset.apply = {};
+        named.forEach((s) => { const take = Math.min(left, ZL.cents(s.outstanding)); if (take) preset.apply[s.doc_id] = take / 100; left -= take; });
+      } else preset.autoApply = true;
+    }
+    return new Promise((resolve) => {
+      preset.onDone = (r) => {
+        if (r) ZL.toast(`${r.doc_no} posted for ${r.contact || "the contact"} and matched${Number(r.advance) > 0 ? ` — RM ${M(r.advance)} kept as an advance` : ""}.`);
+        resolve(!!r);
+      };
+      ZL.tradePay(line.amount > 0 ? "RECEIPT" : "PAYMENT", preset).catch((e) => { ZL.toast(ZL.errorText(e), "bad"); resolve(false); });
+    });
+  }
+
   async function matchLine(line) {
     let cands;
     try { cands = await ZL.rpc("bank_match_candidates", { p_line: line.id }); } catch (e) { ZL.toast(ZL.errorText(e), "bad"); return null; }
@@ -368,11 +396,13 @@
     const [sts, accounts] = await Promise.all([ZL.select("bank_statements", "*", (q) => q.eq("id", p.st).eq("company_id", cid())), ZL.accounts()]);
     const st = sts[0];
     if (!st) return ZL.empty("Statement not found", "It may have been deleted.", btn("zl-bback", "← Statements", "ghost"));
-    const [lines, notOnBank, bal] = await Promise.all([
+    const [lines, notOnBank, bal, suggs] = await Promise.all([
       ZL.select("bank_lines", "*", (q) => q.eq("statement_id", st.id).order("line_no").limit(6000)),
       ZL.rpc("bank_unmatched_book", { p_statement: st.id }).catch(() => []),
       ZL.rpc("account_balances", { p_company: cid(), p_from: null, p_to: st.date_to }).catch(() => null),
+      P ? [] : ZL.rpc("bank_statement_suggestions", { p_statement: st.id }).catch(() => []),
     ]);
+    const sugg = new Map(suggs.map((s) => [s.line_id, s]));
     const acc = new Map(accounts.map((a) => [a.id, a]));
     const bankAcc = acc.get(st.account_id) || { name: "", code: "" };
     const entryIds = lines.filter((l) => l.entry_id).map((l) => l.entry_id);
@@ -412,8 +442,16 @@
       if (l.status === "IGNORED") return `<span class="chip">Ignored</span>${l.note ? ` <span class="hint">${E(l.note)}</span>` : ""}`;
       return `<span class="chip warn">Not in books</span>`;
     };
+    const settle = !P && ZL.can("journal.create") && typeof ZL.tradePay === "function";
+    const hint = (l) => {
+      const s = l.status === "UNMATCHED" && sugg.get(l.id);
+      if (!s) return "";
+      const what = /whole balance/.test(s.why) ? `Clears <b>${E(s.contact_name)}</b>'s balance of RM ${M(s.contact_open)}`
+        : `${l.amount > 0 ? "Pays" : "Settles"} <b>${E(s.doc_no)}</b> · ${E(s.contact_name)}`;
+      return `<div class="zl-bsugg">💡 ${what} <span class="hint">— ${E(s.why)}</span></div>`;
+    };
     const actions = (l) => !can ? "" : l.status === "UNMATCHED"
-      ? `<button type="button" class="zl-btn sm primary" data-brec="${l.id}">Record</button> <button type="button" class="zl-btn sm" data-bmatch="${l.id}">Match</button> <button type="button" class="zl-btn sm ghost" data-bign="${l.id}">Ignore</button>`
+      ? `${settle ? `<button type="button" class="zl-btn sm${sugg.has(l.id) ? " primary" : ""}" data-bsettle="${l.id}" title="${l.amount > 0 ? "A customer paid an invoice" : "You paid a supplier's bill"}">${l.amount > 0 ? "Receive" : "Pay bill"}</button> ` : ""}<button type="button" class="zl-btn sm${settle && sugg.has(l.id) ? "" : " primary"}" data-brec="${l.id}">Record</button> <button type="button" class="zl-btn sm" data-bmatch="${l.id}">Match</button> <button type="button" class="zl-btn sm ghost" data-bign="${l.id}">Ignore</button>`
       : `<button type="button" class="zl-btn sm ghost" data-bun="${l.id}">${l.status === "IGNORED" ? "Restore" : "Unmatch"}</button>`;
 
     return ZL.header(st.name, `${bankAcc.name} · ${bankAcc.code} — ${ZL.date(st.date_from)} to ${ZL.date(st.date_to)} · ${lines.length} lines`,
@@ -444,7 +482,7 @@
         <thead><tr><th>Date</th><th>Bank description</th><th class="r">In</th><th class="r">Out</th><th>In the books</th><th></th></tr></thead>
         <tbody>${shown.map((l) => `<tr>
           <td class="nil" style="white-space:nowrap">${ZL.date(l.date)}</td>
-          <td>${E(l.description || "—")}${l.reference ? `<div class="hint">${E(l.reference)}</div>` : ""}</td>
+          <td>${E(l.description || "—")}${l.reference ? `<div class="hint">${E(l.reference)}</div>` : ""}${hint(l)}</td>
           <td class="r num zl-amt-in">${l.amount > 0 ? M(l.amount) : ""}</td><td class="r num">${l.amount < 0 ? M(-l.amount) : ""}</td>
           <td style="white-space:nowrap">${statusCell(l)}</td>
           <td class="r" style="white-space:nowrap">${actions(l)}</td></tr>`).join("")}</tbody></table></div></section>`
@@ -476,6 +514,7 @@
       }));
       act("[data-brec]", async (b) => { const r = await recordLine(await lineOf(b.dataset.brec)); if (r) ZL.toast(`Recorded as ${r.doc_no || r.reference} and matched.`); return !!r; });
       act("[data-bmatch]", async (b) => matchLine(await lineOf(b.dataset.bmatch)));
+      act("[data-bsettle]", async (b) => settleLine(await lineOf(b.dataset.bsettle)));
       act("[data-bign]", async (b) => {
         const v = await ZL.form({ title: "Ignore this line", intro: "Use this for lines that should not be in these books, such as a transfer already recorded elsewhere.",
           fields: [{ name: "note", label: "Reason", placeholder: "Optional" }], confirmLabel: "Ignore" });
@@ -508,6 +547,7 @@
   .zl-steps3 b{display:block;margin-bottom:3px;font-weight:600}
   .zl-steps3 span{color:var(--ink-3);font-size:13px}
   .zl-recon{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px;margin-bottom:16px}
+  .zl-bsugg{margin-top:4px;font-size:12.5px;color:var(--ink-2)}
   .zl-bar{height:6px;background:var(--line);border-radius:99px;margin-top:8px;overflow:hidden}
   .zl-bar i{display:block;height:100%;background:var(--good,#16a34a);border-radius:99px}
   .zl-proof{width:100%;border-collapse:collapse}
