@@ -1,0 +1,30 @@
+# Keeps the Supabase project awake. Free projects pause after 7 days without
+# activity; this makes a small read every 2 days so Zycount never sleeps.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "17 1 */2 * *"   # 09:17 Malaysia time, every 2 days
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the database
+        env:
+          # Publishable key — already public in docs/js/zy-live.js; RLS protects every table.
+          URL: https://qkrikvmkoelusyjjqdkd.supabase.co/rest/v1/roles?select=name&limit=1
+          KEY: sb_publishable_BoPf8kDj05jPr9__E2hcHQ_p0RH1Hm8
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL" -H "apikey: $KEY")
+            echo "Attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "Supabase did not answer — it may already be paused. Restore it in the dashboard." && exit 1
