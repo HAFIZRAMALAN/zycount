@@ -60,6 +60,13 @@
   .zl-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line-2)}
   .zl-kv>div{background:var(--card);padding:10px 14px;font-size:12px;color:var(--ink-3)}
   .zl-kv b{display:block;color:var(--ink);font-weight:500;font-size:13px;margin-top:2px}
+  .zl-owed-top{display:flex;gap:28px;padding:4px 20px 12px}
+  .zl-owed-top .kval{font-size:22px}
+  .zl-owed-bar{display:flex;height:10px;border-radius:99px;overflow:hidden;margin:0 20px;background:var(--line)}
+  .zl-owed-bar i{display:block;height:100%}
+  .zl-owed-key{display:flex;flex-wrap:wrap;gap:6px 14px;padding:10px 20px 12px;font-size:12px;color:var(--ink-3)}
+  .zl-owed-key i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .zl-owed-key b{color:var(--ink);font-weight:500;margin-left:3px}
   .zl-je-num{display:grid;grid-template-columns:repeat(2,minmax(0,260px));gap:14px;padding:12px 20px;border-bottom:1px solid var(--line-2)}
   @media (max-width:900px){.zl-je-head,.zl-je-num{grid-template-columns:minmax(0,1fr)}}
   `;
@@ -169,7 +176,8 @@
       const today = ctx.today, year = +today.slice(0, 4), month = +today.slice(5, 7);
       const canJ = ZL.can("journal.view");
       const canRecord = ZL.can("journal.create") && ZL.can("journal.post");
-      const [months, prevYear, bal, recent, proof, opening, accounts] = await Promise.all([
+      const trade = !P && canJ;
+      const [months, prevYear, bal, recent, proof, opening, accounts, arAge, apAge] = await Promise.all([
         ZL.rpc("monthly_summary", { p_company: cid(), p_year: year }),
         month === 1 ? ZL.rpc("monthly_summary", { p_company: cid(), p_year: year - 1 }) : Promise.resolve(null),
         ZL.rpc("account_balances", { p_company: cid(), p_from: ZL.monthStart(today), p_to: today }),
@@ -178,6 +186,8 @@
         ZL.rpc("books_proof", { p_company: cid() }),
         canJ ? ZL.count("journal_entries", (q) => q.eq("company_id", cid()).eq("source", "OPENING_BALANCE").eq("status", "POSTED").is("reversal_of_id", null)) : Promise.resolve(0),
         ZL.accounts(),
+        trade ? ZL.rpc("trade_aging", { p_company: cid(), p_side: "AR", p_as_at: today }).catch(() => []) : Promise.resolve([]),
+        trade ? ZL.rpc("trade_aging", { p_company: cid(), p_side: "AP", p_as_at: today }).catch(() => []) : Promise.resolve([]),
       ]);
       const MN = ZL.MONTHS;
       const shape = (m) => m && ({ revenue: ZL.num(m.revenue), cos: ZL.num(m.cost_of_sales), expenses: ZL.num(m.cost_of_sales) + ZL.num(m.expenses),
@@ -227,6 +237,35 @@
             : `<div class="zl-empty" style="padding-top:8px"><p>Nothing posted yet.</p></div>`}
         </section>` : "";
 
+      // Who owes whom: receivables and payables by age, with the most overdue first.
+      const owedCard = (side, rows) => {
+        const AR = side === "AR";
+        const n = (r, k) => ZL.num(r[k]);
+        const over = (r) => n(r, "d1_30") + n(r, "d31_60") + n(r, "d61_90") + n(r, "d91_120") + n(r, "d120_plus");
+        const sum = (f) => rows.reduce((s, r) => s + f(r), 0);
+        const totalBal = sum((r) => n(r, "balance")), overdue = sum(over);
+        const buckets = [["Not due", "not_due", "var(--c5)"], ["1–30", "d1_30", "var(--c1)"], ["31–60", "d31_60", "var(--c4)"],
+          ["61–90", "d61_90", "var(--c2)"], ["90+", null, "var(--bad)"]].map(([l, k, c]) =>
+          ({ l, c, v: k ? sum((r) => n(r, k)) : sum((r) => n(r, "d91_120") + n(r, "d120_plus")) }));
+        const gross = buckets.reduce((s, b) => s + b.v, 0);
+        const late = rows.filter((r) => over(r) > 0).sort((a, b) => (n(b, "d120_plus") + n(b, "d91_120")) - (n(a, "d120_plus") + n(a, "d91_120")) || over(b) - over(a)).slice(0, 4);
+        return `<section class="card zl-owed">
+          <header><div><h3>${AR ? "Customers owe you" : "You owe suppliers"}</h3><p>${rows.length} ${AR ? "customer" : "supplier"}${rows.length === 1 ? "" : "s"} with an open balance</p></div>
+            <button type="button" class="zl-btn sm ghost" data-go="${AR ? "araging" : "apaging"}" style="margin-left:auto">Aging</button></header>
+          <div class="zl-owed-top"><div><div class="klabel">Outstanding</div><div class="kval num">${M(totalBal, { symbol: true })}</div></div>
+            <div><div class="klabel">Overdue</div><div class="kval num" style="${overdue > 0 ? "color:var(--bad)" : ""}">${M(overdue, { symbol: true })}</div></div></div>
+          ${gross > 0 ? `<div class="zl-owed-bar" role="img" aria-label="Open balance by age">${buckets.filter((b) => b.v > 0).map((b) =>
+              `<i style="width:${((b.v / gross) * 100).toFixed(2)}%;background:${b.c}" title="${b.l} days: ${M(b.v)}"></i>`).join("")}</div>
+            <div class="zl-owed-key">${buckets.map((b) => `<span><i style="background:${b.c}"></i>${b.l}${b.l === "Not due" ? "" : " days"} <b class="num">${M(b.v)}</b></span>`).join("")}</div>` : ""}
+          ${late.length ? `<div class="tablewrap"><table><tbody>${late.map((r) => `<tr class="click" data-contact="${r.contact_id}">
+              <td><div style="font-weight:500">${E(r.name)}</div><div class="hint">${E(r.code)}${n(r, "d91_120") + n(r, "d120_plus") > 0 ? ' · <span style="color:var(--bad)">over 90 days</span>' : ""}</div></td>
+              <td class="r num" style="color:var(--bad)">${M(over(r))}</td>
+              ${canRecord ? `<td class="r" style="width:1%"><button type="button" class="zl-btn sm" data-settle="${AR ? "RECEIPT" : "PAYMENT"}" data-c="${r.contact_id}">${AR ? "Receive" : "Pay"}</button></td>` : ""}</tr>`).join("")}</tbody></table></div>`
+            : `<p class="hint" style="padding:4px 20px 18px">${rows.length ? "Nothing overdue. " : ""}${AR ? "Every customer is within terms." : "Every bill is within terms."}</p>`}
+        </section>`;
+      };
+      const owedHtml = trade && (arAge.length || apAge.length) ? `<div class="grid2">${owedCard("AR", arAge)}${owedCard("AP", apAge)}</div>` : "";
+
       const started = proof.entries > 0;
       const steps = `
         <section class="card">
@@ -244,6 +283,7 @@
 
       return ZL.header(greeting, `${ZL.company.name} · ${monthName(today)}`, quick) + `
         <div class="kpi-head zl-kpis">${kpis}</div>
+        ${owedHtml}
         ${started ? `
         <div class="grid2">
           <section class="card">
@@ -265,6 +305,12 @@
       on("zl-d-pl", () => go("pl"));
       on("zl-d-all", () => go("journals"));
       on("zl-recheck", () => ZL.refresh());
+      root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+      root.querySelectorAll("[data-contact]").forEach((r) => r.addEventListener("click", (ev) => {
+        if (ev.target.closest("button")) return;
+        ZL.open("contact", { id: r.dataset.contact });
+      }));
+      root.querySelectorAll("[data-settle]").forEach((b) => b.addEventListener("click", () => ZL.tradePay && ZL.tradePay(b.dataset.settle, { contact_id: b.dataset.c })));
       wireJournalLinks(root);
     },
   });

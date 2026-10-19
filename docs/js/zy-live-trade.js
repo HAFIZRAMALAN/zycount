@@ -34,9 +34,11 @@
     SUPPLIER_CN:     { side: "AP", label: "Supplier credit note", plural: "Supplier credit notes", title: "Credit Note", lines: true, posts: true, effect: -1 },
     PAYMENT:         { side: "AP", label: "Payment", plural: "Payments", title: "Payment Voucher", lines: false, posts: true, effect: -1, money: true },
     SUPPLIER_REFUND: { side: "AP", label: "Supplier refund", plural: "Supplier refunds", title: "Official Receipt", lines: false, posts: true, effect: 1, money: true },
+    AR_CONTRA:       { side: "AR", label: "Contra", plural: "Contras", title: "Contra Note", lines: false, posts: true, effect: -1, contra: true },
+    AP_CONTRA:       { side: "AP", label: "Contra", plural: "Contras", title: "Contra Note", lines: false, posts: true, effect: -1, contra: true },
   };
-  const SALES = ["QUOTATION", "INVOICE", "CASH_SALE", "DEBIT_NOTE", "CREDIT_NOTE", "RECEIPT", "REFUND"];
-  const PURCHASES = ["PURCHASE_ORDER", "BILL", "CASH_PURCHASE", "SUPPLIER_DN", "SUPPLIER_CN", "PAYMENT", "SUPPLIER_REFUND"];
+  const SALES = ["QUOTATION", "INVOICE", "CASH_SALE", "DEBIT_NOTE", "CREDIT_NOTE", "RECEIPT", "REFUND", "AR_CONTRA"];
+  const PURCHASES = ["PURCHASE_ORDER", "BILL", "CASH_PURCHASE", "SUPPLIER_DN", "SUPPLIER_CN", "PAYMENT", "SUPPLIER_REFUND", "AP_CONTRA"];
   const seriesKind = (t) => ({ REFUND: "PAYMENT", SUPPLIER_REFUND: "RECEIPT" }[t] || t);
   const SIDE = {
     AR: { route: "sales", who: "customer", Who: "Customer", kind: "CUSTOMER", list: "customers", aging: "araging", pay: "RECEIPT", payLabel: "Receive payment" },
@@ -147,14 +149,15 @@
     const stamp = d.status === "VOID" ? "VOID" : d.status === "DRAFT" ? "DRAFT" : "";
     const ttl = title || t.title;
     if (!t.lines) {
-      const partyHead = { RECEIPT: "Received from", REFUND: "Refunded to", PAYMENT: "Paid to", SUPPLIER_REFUND: "Received from" }[d.doc_type];
+      const partyHead = { RECEIPT: "Received from", REFUND: "Refunded to", PAYMENT: "Paid to", SUPPLIER_REFUND: "Received from", AR_CONTRA: "Customer", AP_CONTRA: "Supplier" }[d.doc_type];
       const rows = allocs.map((a) => `<tr><td>${E(T[a.doc_type] ? T[a.doc_type].label : "")} ${E(a.doc_no)}<div class="acct">${E(ZL.date(a.date))}${a.reference ? ` · ${E(a.reference)}` : ""}</div></td><td class="r">${M(a.amount)}</td></tr>`);
       const left = r2(ZL.num(d.total) - allocs.reduce((s, a) => s + ZL.num(a.amount), 0));
       if (left > 0) rows.push(`<tr><td>${E(d.description || (t.effect === -1 ? "Advance payment / deposit" : "Refund"))}</td><td class="r">${M(left)}</td></tr>`);
       const labels = (ds.sign_labels || []).filter(Boolean).slice(0, 4);
       return shell(ds, `${letterhead(info, ds, ttl, [["No.", d.doc_no || "Draft"], ["Date", ZL.date(d.date)], ["Reference", d.reference]])}
         <div class="zv-party"><div><span>${partyHead}</span><b>${E(d.bill_name || (c && c.name) || "")}</b></div>
-          <div><span>${t.effect === -1 && t.side === "AR" || d.doc_type === "SUPPLIER_REFUND" ? "Received into" : "Paid from"}</span><b>${E(bank ? bank.name : "")}</b></div>
+          ${t.contra ? `<div><span>Settled by</span><b>Set-off of trade receivables against trade payables</b></div>`
+            : `<div><span>${t.effect === -1 && t.side === "AR" || d.doc_type === "SUPPLIER_REFUND" ? "Received into" : "Paid from"}</span><b>${E(bank ? bank.name : "")}</b></div>`}
           <div><span>Payment method</span><b>${E(d.pay_method || "")}</b></div></div>
         <table class="zv-lines"><thead><tr><th>${d.doc_type === "RECEIPT" ? "Being payment for" : "Particulars"}</th><th class="r" style="width:150px">Amount (RM)</th></tr></thead>
           <tbody>${rows.join("") || `<tr><td>${E(d.description || "")}</td><td class="r">${M(d.total)}</td></tr>`}</tbody>
@@ -678,8 +681,8 @@
         ...(t.posts && t.effect !== 0 && d.status === "POSTED" ? [[t.effect === 1 ? "Balance due" : "Not yet applied", `RM ${M(outstanding(d))}`]] : []),
         ...(d.due_date ? [[t.posts ? "Due" : d.doc_type === "QUOTATION" ? "Valid until" : "Deliver by", ZL.date(d.due_date)]] : []),
         ...(d.journal_entry_id ? [["Journal", `<button type="button" class="zl-ref" data-open-journal="${d.journal_entry_id}">Open journal</button>${d.void_entry_id ? ` · <button type="button" class="zl-ref" data-open-journal="${d.void_entry_id}">Reversal</button>` : ""}`]] : []),
-        ...(src[0] ? [["From", `<button type="button" class="zl-ref" data-doc="${src[0].id}">${E(T[src[0].doc_type].label)} ${E(src[0].doc_no)}</button>`]] : []),
-        ...(conv.length ? [["Turned into", conv.map((c) => `<button type="button" class="zl-ref" data-doc="${c.id}">${E(c.doc_no || "Draft " + T[c.doc_type].label.toLowerCase())}</button>${c.status === "VOID" ? " (void)" : ""}`).join(", ")]] : []),
+        ...(src[0] ? [[t.contra ? (t.side === "AR" ? "Supplier side" : "Customer side") : "From", `<button type="button" class="zl-ref" data-doc="${src[0].id}">${E(T[src[0].doc_type].label)} ${E(src[0].doc_no)}</button>`]] : []),
+        ...(conv.length && !t.contra ? [["Turned into", conv.map((c) => `<button type="button" class="zl-ref" data-doc="${c.id}">${E(c.doc_no || "Draft " + T[c.doc_type].label.toLowerCase())}</button>${c.status === "VOID" ? " (void)" : ""}`).join(", ")]] : []),
       ];
       const allocTable = b.allocs.length ? `<section class="card" style="margin-top:16px"><div class="zl-sec-h"><h3>${t.effect === -1 ? "Applied to" : "Paid / credited by"}</h3></div>
         <div class="tablewrap"><table><thead><tr><th>Document</th><th>Date</th><th class="r">Amount</th><th></th></tr></thead>
@@ -1012,6 +1015,7 @@
           (canNew ? `<button type="button" class="zl-btn ghost" data-edit>Edit</button>` : "") +
           `<button type="button" class="zl-btn ghost" data-stmt>Statement</button>` +
           (canNew ? `<button type="button" class="zl-btn ghost" data-obal>Opening balance</button><button type="button" class="zl-btn" data-new="${side === "AR" ? "INVOICE" : "BILL"}">+ ${side === "AR" ? "Invoice" : "Purchase invoice"}</button>` : "") +
+          (canNew && canPay && c.is_active ? `<button type="button" class="zl-btn ghost" data-contra title="Set off against the same party's ${side === "AR" ? "supplier" : "customer"} balance">Contra</button>` : "") +
           (canPay && c.is_active ? `<button type="button" class="zl-btn primary" data-pay>${S.payLabel}</button>` : "")) + `
         <section class="card"><div class="zl-facts">${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${E(v)}</b></div>`).join("")}</div></section>
         <section class="card" style="margin-top:16px"><div class="zl-sec-h"><h3>Open documents</h3></div>
@@ -1032,9 +1036,85 @@
       on("[data-obal]", () => openingDoc(c));
       on("[data-new]", (el) => ZL.tradeEdit(el.dataset.new, null, { contact_id: c.id }));
       on("[data-pay]", () => ZL.tradePay(SIDE[side].pay, { contact_id: c.id }));
+      on("[data-contra]", () => ZL.contra(c).catch((e) => ZL.toast(ZL.errorText(e), "bad")));
       on("[data-doc]", (el) => ZL.open("tradedoc", { id: el.dataset.doc, side }));
     },
   });
+
+  // ── Contra: set a customer's balance off against the same party's supplier balance ──
+  ZL.contra = async (c) => {
+    if (!(ZL.can("journal.create") && ZL.can("journal.post"))) { ZL.toast("Your role can't post contras in these books.", "bad"); return null; }
+    const isCu = c.kind === "CUSTOMER";
+    const [others, numRows] = await Promise.all([contacts(isCu ? "SUPPLIER" : "CUSTOMER"), ZL.numbering.load(ZL.today()).catch(() => [])]);
+    const key = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const same = others.find((o) => o.is_active && ((c.reg_no && key(o.reg_no) === key(c.reg_no)) || (c.tin && key(o.tin) === key(c.tin)) || key(o.name) === key(c.name)));
+    const numFields = ZL.numbering.fields(numRows, "CONTRA", null);
+    const f = (label, control, cls = "") => `<label class="zl-field ${cls}"><span>${label}</span>${control}</label>`;
+    const other = isCu ? "supplier" : "customer";
+    const body = `
+      <p class="hint" style="margin:0 0 10px">When ${E(c.name)} is both a customer and a supplier, set what they owe you off against what you owe them. One journal moves the amount from trade payables to trade receivables, and both sides' invoices and bills are knocked off.</p>
+      <div class="zl-dochead">
+        ${f(`${isCu ? "Same party as supplier" : "Same party as customer"} <i aria-hidden="true">*</i>`, `<select class="zl-input" name="other"><option value="">Choose ${other}…</option>${others.filter((o) => o.is_active).map((o) => opt(o.id, `${o.name} · ${o.code}`, same && same.id)).join("")}</select>`, "wide")}
+        ${f('Date <i aria-hidden="true">*</i>', `<input class="zl-input" type="date" name="date" value="${E(ZL.today())}">`)}
+        ${f('Amount to set off <i aria-hidden="true">*</i>', `<div class="zl-amount"><span>RM</span><input class="zl-input num" name="amount" inputmode="decimal" placeholder="0.00"></div>`)}
+        ${f("Description", `<input class="zl-input" name="description" maxlength="500" placeholder="Optional">`, "wide")}
+        ${numFields.map((x) => `<label class="zl-field"><span>${E(x.label)}</span>${x.type === "select"
+          ? `<select class="zl-input" name="${x.name}">${x.options.map((o) => opt(o.value, o.label, x.value)).join("")}</select>`
+          : `<input class="zl-input" name="${x.name}" value="${E(x.value)}">`}</label>`).join("")}
+      </div>
+      <div class="zl-sec-h" style="padding:14px 0 6px"><h3 style="font-size:14px">Customer invoices it settles</h3></div><div id="zl-car" class="zl-lines-wrap"></div>
+      <div class="zl-sec-h" style="padding:14px 0 6px"><h3 style="font-size:14px">Supplier bills it settles</h3></div><div id="zl-cap" class="zl-lines-wrap"></div>
+      <div class="zl-totals" id="zl-ctot" style="margin-top:8px"></div>`;
+    let result = null, arOpen = [], apOpen = [];
+    const m = ZL.modal({ title: `Contra — ${c.name}`, wide: true, body,
+      actions: [{ label: "Cancel" }, { label: "Post contra", primary: true, onClick: async ({ root, close }) => {
+        const v = (n) => root.querySelector(`[name="${n}"]`).value.trim();
+        const amount = ZL.parseAmount(v("amount"));
+        if (!v("other")) throw bad(`Choose the ${other}.`);
+        if (Number.isNaN(amount) || !amount) throw bad("Enter the amount to set off.");
+        const read = (box) => [...root.querySelectorAll(`${box} [data-apply]`)].map((i) => ({ doc_id: i.dataset.apply, amount: ZL.parseAmount(i.value) })).filter((a) => a.amount);
+        const ar = read("#zl-car"), ap = read("#zl-cap");
+        if (ar.concat(ap).some((a) => Number.isNaN(a.amount))) throw bad("Knock-off amounts must be numbers.");
+        [ar, ap].forEach((list, i) => { const s = list.reduce((t, a) => t + ZL.cents(a.amount), 0); if (s > ZL.cents(amount)) throw bad(`The ${i ? "bills" : "invoices"} you picked add up to ${M(s / 100)}, more than the ${M(amount)} set off.`); });
+        const num = numCtl ? numCtl.read() : {};
+        result = await ZL.rpc("post_contra", { p_company: cid(), p_customer: isCu ? c.id : v("other"), p_supplier: isCu ? v("other") : c.id,
+          p_date: v("date"), p_amount: amount, p_ar_allocations: ar, p_ap_allocations: ap, p_description: v("description") || null,
+          p_series: num.p_series || null, p_doc_no: num.p_doc_no || null });
+        close();
+      } }],
+      onClose: () => { if (result) { ZL.toast(`Contra ${result.doc_no} posted — RM ${M(result.total)} set off.`); ZL.open("tradedoc", { id: isCu ? result.id : result.ap_id }); } } });
+    const root = m.root;
+    const numCtl = numFields.length ? ZL.numbering.wire(root, numRows, "CONTRA", { dateInput: root.querySelector('[name="date"]') }) : null;
+    const amountInp = root.querySelector('[name="amount"]');
+    const table = (list) => list.length ? `<table class="zl-lines" style="min-width:520px"><thead><tr><th>Document</th><th>Date</th><th>Due</th><th class="r">Open</th><th class="r" style="width:130px">Apply</th></tr></thead>
+      <tbody>${list.map((o) => `<tr><td><b>${E(o.doc_no)}</b> <span class="hint">${E(T[o.doc_type].label)}</span></td><td class="nil">${ZL.date(o.date)}</td>
+        <td class="nil">${o.due_date ? ZL.date(o.due_date) : "—"}</td><td class="amt">${M(o.outstanding)}</td>
+        <td><input class="zl-input num r" data-apply="${o.id}" data-max="${o.outstanding}" inputmode="decimal" placeholder="0.00"></td></tr>`).join("")}</tbody></table>`
+      : `<p class="nil" style="padding:8px 12px">Nothing open.</p>`;
+    const fill = (box) => { let left = ZL.cents(ZL.parseAmount(amountInp.value) || 0);
+      root.querySelectorAll(`${box} [data-apply]`).forEach((i) => { const take = Math.min(left, ZL.cents(i.dataset.max)); i.value = take ? M(take / 100) : ""; left -= take; }); };
+    const tot = () => {
+      const sum = (box) => [...root.querySelectorAll(`${box} [data-apply]`)].reduce((s, i) => s + ZL.cents(ZL.parseAmount(i.value) || 0), 0) / 100;
+      const cap = Math.min(ZL.sum(arOpen, (o) => o.outstanding), ZL.sum(apOpen, (o) => o.outstanding));
+      root.querySelector("#zl-ctot").innerHTML = `<span>Most you can set off</span><b>${M(cap)}</b><span>Invoices applied</span><b>${M(sum("#zl-car"))}</b><span>Bills applied</span><b>${M(sum("#zl-cap"))}</b>`;
+    };
+    const load = async () => {
+      const otherId = root.querySelector('[name="other"]').value;
+      const [mine, theirs] = await Promise.all([ZL.rpc("trade_open_docs", { p_contact: c.id }), otherId ? ZL.rpc("trade_open_docs", { p_contact: otherId }) : Promise.resolve([])]);
+      const plus = (l) => l.filter((o) => o.effect === 1);
+      arOpen = plus(isCu ? mine : theirs); apOpen = plus(isCu ? theirs : mine);
+      root.querySelector("#zl-car").innerHTML = table(arOpen);
+      root.querySelector("#zl-cap").innerHTML = table(apOpen);
+      const cap = Math.min(ZL.sum(arOpen, (o) => o.outstanding), ZL.sum(apOpen, (o) => o.outstanding));
+      amountInp.value = cap > 0 ? M(cap) : "";
+      fill("#zl-car"); fill("#zl-cap"); tot();
+    };
+    root.querySelector('[name="other"]').addEventListener("change", load);
+    amountInp.addEventListener("change", () => { const v = ZL.parseAmount(amountInp.value); if (!Number.isNaN(v) && v) amountInp.value = M(v); fill("#zl-car"); fill("#zl-cap"); tot(); });
+    root.addEventListener("input", (ev) => { if (ev.target.dataset.apply) tot(); });
+    await load();
+    return null;
+  };
 
   // ── Aged receivables / payables ──────────────────────────────────────────
   function agingPage(side) {

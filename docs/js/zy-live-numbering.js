@@ -17,10 +17,11 @@
     PAYMENT: ZL.T("Payment vouchers", "Money out"), RECEIPT: ZL.T("Official receipts", "Money in"), JOURNAL: "Journals",
     QUOTATION: "Quotations", INVOICE: "Sales invoices", CASH_SALE: "Cash sales", DEBIT_NOTE: "Debit notes", CREDIT_NOTE: "Credit notes",
     PURCHASE_ORDER: "Purchase orders", BILL: "Purchase invoices", CASH_PURCHASE: "Cash purchases", SUPPLIER_DN: "Supplier debit notes", SUPPLIER_CN: "Supplier credit notes",
+    CONTRA: "Contras",
   });
   const SALES_KINDS = ["QUOTATION", "INVOICE", "CASH_SALE", "DEBIT_NOTE", "CREDIT_NOTE"];
   const PURCHASE_KINDS = ["PURCHASE_ORDER", "BILL", "CASH_PURCHASE", "SUPPLIER_DN", "SUPPLIER_CN"];
-  const kindsFor = () => ["PAYMENT", "RECEIPT", "JOURNAL"].concat(ZL.isPersonal() ? [] : SALES_KINDS.concat(PURCHASE_KINDS));
+  const kindsFor = () => ["PAYMENT", "RECEIPT", "JOURNAL"].concat(ZL.isPersonal() ? [] : SALES_KINDS.concat(PURCHASE_KINDS, ["CONTRA"]));
   const moneyKind = (k) => k === "PAYMENT" || k === "RECEIPT";
   const MODE_LABEL = { AUTO: "Automatic only", AUTO_EDITABLE: "Automatic, or key your own", MANUAL: "Keyed by hand" };
   const RESET_LABEL = { YEARLY: "Every year", MONTHLY: "Every month", NEVER: "Never" };
@@ -229,7 +230,7 @@
       };
       return ZL.header("Numbering", ZL.T("Choose how invoices, notes, vouchers, receipts and journals are numbered — automatically or keyed by hand.", "Choose how vouchers, receipts and journals are numbered — automatically or keyed by hand.")) +
         section("PAYMENT") + section("RECEIPT") +
-        (ZL.isPersonal() ? "" : section("INVOICE", "Sales documents", SALES_KINDS) + section("BILL", "Purchase documents", PURCHASE_KINDS)) + section("JOURNAL") +
+        (ZL.isPersonal() ? "" : section("INVOICE", "Sales documents", SALES_KINDS) + section("BILL", "Purchase documents", PURCHASE_KINDS) + section("CONTRA")) + section("JOURNAL") +
         `<p class="hint">Automatic numbers never skip or repeat, and every number is checked for duplicates. Account codes are changed in <button type="button" class="zl-ref" id="zl-to-coa">${ZL.T("Chart of accounts", "Accounts & categories")}</button>.</p>`;
     },
     after(root) {
