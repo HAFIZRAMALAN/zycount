@@ -242,6 +242,10 @@
               ${canEdit ? `<div><button type="submit" class="zl-btn primary">Save changes</button></div>` : ""}
             </form>
           </div>
+          ${P ? "" : `<div class="zl-set">
+            <div><h3>e-Invoice (LHDN)</h3><p>Connect MyInvois to send invoices, credit notes and debit notes to LHDN and print the validation QR.</p></div>
+            <div><button type="button" class="zl-btn" id="zl-to-einv">Set up e-Invoice</button></div>
+          </div>`}
           <div class="zl-set">
             <div><h3>Your profile</h3><p>Your name appears on the journals you create and in the audit trail.</p></div>
             <form class="zl-form" id="zl-meform" autocomplete="off">
@@ -278,6 +282,8 @@
         if (e) form.insertAdjacentHTML("beforeend", ZL.errorBox(e));
       };
       const busy = (form, on) => form.querySelectorAll("button").forEach((b) => { b.disabled = on; });
+      const einv = root.querySelector("#zl-to-einv");
+      if (einv) einv.addEventListener("click", () => ZL.open("einvoice", {}));
       const co = root.querySelector("#zl-coform");
       co.addEventListener("submit", async (ev) => {
         ev.preventDefault();
