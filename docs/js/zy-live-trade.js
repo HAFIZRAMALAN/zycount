@@ -82,7 +82,12 @@
   }
 
   /** Status as people read it: draft, open, part-paid, paid, overdue, void. */
+  const EINV_CHIP = { VALID: '<span class="chip ok" title="Validated by LHDN">LHDN ✓</span>', SUBMITTED: '<span class="chip" title="With LHDN, waiting for validation">LHDN…</span>',
+    INVALID: '<span class="chip bad" title="LHDN rejected it — open to see why">LHDN ✗</span>', CANCELLED: '<span class="chip" title="Cancelled at LHDN">LHDN cancelled</span>' };
   function statusChip(d) {
+    return baseChip(d) + (d.einvoice_status && EINV_CHIP[d.einvoice_status] ? " " + EINV_CHIP[d.einvoice_status] : "");
+  }
+  function baseChip(d) {
     const t = T[d.doc_type];
     if (d.status === "DRAFT") return '<span class="chip">Draft</span>';
     if (d.status === "VOID") return '<span class="chip bad">Void</span>';
@@ -144,7 +149,7 @@
   };
 
   /** The printable document. data = { doc, lines, contact, info, ds, taxes, allocs, bank, title } */
-  ZL.tradeDocHtml = ({ doc: d, lines = [], contact: c, info, ds, taxes = [], allocs = [], bank, title }) => {
+  ZL.tradeDocHtml = ({ doc: d, lines = [], contact: c, info, ds, taxes = [], allocs = [], bank, title, einvoice = "" }) => {
     const t = T[d.doc_type];
     const stamp = d.status === "VOID" ? "VOID" : d.status === "DRAFT" ? "DRAFT" : "";
     const ttl = title || t.title;
@@ -193,6 +198,7 @@
       </tbody></table>
       <div class="zv-words"><span>Amount in words</span><b>${E(ZL.amountWords(d.total))}</b></div>
       ${d.notes ? `<div class="zv-notes"><span>Notes</span>${E(d.notes)}</div>` : ""}
+      ${einvoice}
       ${ds.footer ? `<div class="zv-foot">${E(ds.footer)}</div>` : ""}
       <div class="zv-gen">Computer-generated in Zycount — no signature required.${d.status === "VOID" ? ` Voided on ${E(ZL.date(d.void_date))}: ${E(d.void_reason || "")}.` : ""}</div>`, stamp);
   };
@@ -213,7 +219,8 @@
     const om = new Map(others.map((o) => [o.id, o]));
     const allocs = allocRows.map((a) => { const o = om.get(a.from_doc_id === id ? a.to_doc_id : a.from_doc_id) || {};
       return { id: a.id, amount: a.amount, alloc_date: a.date, other_id: o.id, doc_type: o.doc_type, doc_no: o.doc_no, date: o.date, reference: o.reference }; });
-    return { doc, lines, contact: cs[0] || null, info, ds, taxes, allocs, accounts,
+    const einvoice = doc.einvoice_status === "VALID" && ZL.einvoice ? await ZL.einvoice.printBlock(doc).catch(() => "") : "";
+    return { doc, lines, contact: cs[0] || null, info, ds, taxes, allocs, accounts, einvoice,
       bank: accounts.find((a) => a.id === doc.money_account_id), title: series[0] && series[0].title };
   }
 
@@ -693,6 +700,7 @@
         ZL.header(`${b.title || t.label} ${d.doc_no || "(draft)"}`, d.status === "VOID" ? `Voided ${ZL.date(d.void_date)} — ${d.void_reason || ""}` : d.status === "DRAFT" ? "Draft — not in the books until you post it." : `${t.posts ? "Posted" : "Issued"} ${ZL.dateTime(d.posted_at)}`,
           acts.join("")) + `
         <section class="card"><div class="zl-facts">${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${v}</b></div>`).join("")}<div><span>Status</span><b>${statusChip(d)}</b></div></div></section>
+        <div data-einv></div>
         <div class="zl-vwrap" style="margin-top:16px;max-height:none">${html}</div>${allocTable}<div data-attach></div>`;
     },
     after(root, ctx) {
@@ -728,6 +736,7 @@
       on("[data-contact]", (el) => ZL.open("contact", { id: el.dataset.contact }));
       ZL.wireJournalLinks(root);
       if (ZL.capture) ZL.capture.panel(root.querySelector("[data-attach]"), "TRADE_DOC", d.id, { posted: d.status !== "DRAFT" });
+      if (ZL.einvoice) ZL.einvoice.panel(root.querySelector("[data-einv]"), d);
     },
   });
 
@@ -1014,6 +1023,7 @@
         ZL.header(c.name, [c.code, addr].filter(Boolean).join(" · "),
           (canNew ? `<button type="button" class="zl-btn ghost" data-edit>Edit</button>` : "") +
           `<button type="button" class="zl-btn ghost" data-stmt>Statement</button>` +
+          (side === "AR" && c.tin && ZL.einvoice ? `<button type="button" class="zl-btn ghost" data-tin title="Ask LHDN whether this TIN matches the registration / IC no.">Check TIN</button>` : "") +
           (canNew ? `<button type="button" class="zl-btn ghost" data-obal>Opening balance</button><button type="button" class="zl-btn" data-new="${side === "AR" ? "INVOICE" : "BILL"}">+ ${side === "AR" ? "Invoice" : "Purchase invoice"}</button>` : "") +
           (canNew && canPay && c.is_active ? `<button type="button" class="zl-btn ghost" data-contra title="Set off against the same party's ${side === "AR" ? "supplier" : "customer"} balance">Contra</button>` : "") +
           (canPay && c.is_active ? `<button type="button" class="zl-btn primary" data-pay>${S.payLabel}</button>` : "")) + `
@@ -1033,6 +1043,7 @@
       on("[data-back]", () => go(SIDE[side].list));
       on("[data-edit]", () => ZL.editContact(c.kind, c.id));
       on("[data-stmt]", () => ZL.statement(c.id));
+      on("[data-tin]", async (el) => { el.disabled = true; await ZL.einvoice.checkTin(c.id); el.disabled = false; });
       on("[data-obal]", () => openingDoc(c));
       on("[data-new]", (el) => ZL.tradeEdit(el.dataset.new, null, { contact_id: c.id }));
       on("[data-pay]", () => ZL.tradePay(SIDE[side].pay, { contact_id: c.id }));
