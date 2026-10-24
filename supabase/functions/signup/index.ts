@@ -30,14 +30,10 @@ function reply(origin: string | null, status: number, body: Record<string, unkno
   });
 }
 
-// Best-effort throttle per instance: 5 sign-ups per address per hour.
-const attempts = new Map<string, number[]>();
-function throttled(ip: string) {
-  const now = Date.now();
-  const recent = (attempts.get(ip) ?? []).filter((t) => now - t < 3_600_000);
-  recent.push(now);
-  attempts.set(ip, recent);
-  return recent.length > 5;
+// The address is kept only as a SHA-256 hash, for the database throttle.
+async function ipHash(ip: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`zycount-signup:${ip}`));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -47,8 +43,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(origin) });
   if (req.method !== "POST") return reply(origin, 405, { error: "METHOD_NOT_ALLOWED: Use POST." });
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (throttled(ip)) return reply(origin, 429, { error: "RATE_LIMITED: Too many sign-ups from this address. Try again later." });
+  const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-real-ip") ??
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
   let body: Record<string, unknown>;
   try {
@@ -77,6 +73,15 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  // 5 sign-ups an hour per address and 60 an hour overall, counted in the
+  // database so every function instance shares the same limit.
+  const { data: allowed, error: throttleError } = await admin.rpc("_signup_allowed", { p_ip_hash: await ipHash(ip) });
+  if (throttleError) {
+    console.error("signup throttle failed", throttleError.message);
+    return reply(origin, 503, { error: "INTERNAL: Sign-up is busy. Try again in a minute." });
+  }
+  if (!allowed) return reply(origin, 429, { error: "RATE_LIMITED: Too many sign-ups right now. Try again later." });
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,

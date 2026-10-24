@@ -413,7 +413,32 @@ const DEMO_USERS: DemoUserSpec[] = [
   { email: "viewer@zycount.test", name: "Tan Mei Ling", roles: ["ReadOnly"] },
 ];
 
+/**
+ * The seed creates a SuperAdmin with a password printed in the README, so it
+ * must never reach a real database. It runs against a local host unless
+ * ZYCOUNT_ALLOW_DEMO_SEED=1 says the target is a disposable demo, and never
+ * when NODE_ENV is production.
+ */
+function assertDemoTarget(): void {
+  const url = process.env.DATABASE_URL ?? "";
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    host = "";
+  }
+  const local = ["localhost", "127.0.0.1", "::1", "postgres", "db"].includes(host);
+  const allowed = process.env.ZYCOUNT_ALLOW_DEMO_SEED === "1";
+  if (process.env.NODE_ENV === "production" || (!local && !allowed)) {
+    throw new Error(
+      `Refusing to seed demo users (known password) into ${host || "an unknown database"}. ` +
+        "The seed is for local and disposable demo databases only; set ZYCOUNT_ALLOW_DEMO_SEED=1 for a demo host.",
+    );
+  }
+}
+
 async function main(): Promise<void> {
+  assertDemoTarget();
   const started = Date.now();
   console.log("→ Seeding Zycount Phase 1 data…\n");
 

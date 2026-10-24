@@ -1,0 +1,26 @@
+# Local Supabase for CI (ci.yml → supabase job): applies supabase/migrations to
+# a fresh database and runs supabase/tests/invariants.sql against it.
+# The hosted project is qkrikvmkoelusyjjqdkd; this file does not configure it.
+project_id = "zycount"
+
+[db]
+port = 54322
+major_version = 17
+
+[api]
+enabled = false
+
+[studio]
+enabled = false
+
+[inbucket]
+enabled = false
+
+[realtime]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
