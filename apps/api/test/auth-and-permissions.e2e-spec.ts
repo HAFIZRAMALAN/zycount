@@ -81,7 +81,12 @@ describe("auth and permissions", () => {
   });
 
   describe("session lifecycle", () => {
-    it("rotates the refresh token and refuses a replayed one", async () => {
+    const refreshCookie = (response: request.Response) =>
+      ((response.headers["set-cookie"] as unknown as string[]) ?? [])
+        .find((value) => value.startsWith("zycount_refresh="))
+        ?.split(";")[0];
+
+    it("rotates the refresh token on every use", async () => {
       const agent = request.agent(server());
 
       await agent
@@ -94,6 +99,39 @@ describe("auth and permissions", () => {
 
       // The agent now holds the rotated cookie, so this must succeed…
       await agent.post("/api/auth/refresh").expect(200);
+    });
+
+    it("refuses a replayed refresh token and ends the whole family", async () => {
+      const signIn = await request(server())
+        .post("/api/auth/login")
+        .send({ email: "viewer@zycount.test", password: DEMO_PASSWORD })
+        .expect(200);
+      const original = refreshCookie(signIn)!;
+      expect(original).toBeTruthy();
+
+      const rotated = await request(server()).post("/api/auth/refresh").set("Cookie", original).expect(200);
+      const successor = refreshCookie(rotated)!;
+
+      const replay = await request(server()).post("/api/auth/refresh").set("Cookie", original).expect(401);
+      expect(replay.body.error.code).toBe("AUTH_REFRESH_REUSED");
+
+      // The token issued before the replay was detected is dead too.
+      await request(server()).post("/api/auth/refresh").set("Cookie", successor).expect(401);
+    });
+
+    it("lets only one of two simultaneous refreshes with the same token through", async () => {
+      const signIn = await request(server())
+        .post("/api/auth/login")
+        .send({ email: "viewer@zycount.test", password: DEMO_PASSWORD })
+        .expect(200);
+      const token = refreshCookie(signIn)!;
+
+      const results = await Promise.all(
+        Array.from({ length: 4 }, () => request(server()).post("/api/auth/refresh").set("Cookie", token)),
+      );
+
+      expect(results.filter((r) => r.status === 200)).toHaveLength(1);
+      expect(results.filter((r) => r.status === 401)).toHaveLength(3);
     });
 
     it("refuses a refresh with no cookie at all", async () => {

@@ -8,7 +8,20 @@ source document.
 SOURCE DOCUMENT -> BUSINESS TRANSACTION -> ACCOUNTING POSTING -> JOURNAL -> GENERAL LEDGER -> FINANCIAL REPORT
 ```
 
-## Status
+## What is live today
+
+This repository holds two implementations. Only the first one is deployed.
+
+| | Live product | Reference monorepo |
+|---|---|---|
+| **Where** | `docs/` (static app) + `supabase/` (Postgres, row-level security, SQL functions, edge functions) | `apps/web` (Next.js) + `apps/api` (NestJS) + `packages/` (Prisma) |
+| **Deployed** | GitHub Pages ([pages.yml](.github/workflows/pages.yml)) on Supabase project `qkrikvmkoelusyjjqdkd` | Not deployed — [deploy.yml](.github/workflows/deploy.yml) runs by hand only and fails until a hosting target is configured |
+| **Modules working on real books** | Accounts, journals, periods, reports, bank reconciliation and statement import, sales and purchases (quotation → invoice → receipt, bills, payments, credit/debit notes, knock-off, contra, aging, statements), cash book, receipt capture, LHDN MyInvois e-Invoice | Phase 1 core; other screens render sample data |
+| **Tested in CI** | `supabase` job — every migration on a fresh database, then [supabase/tests/invariants.sql](supabase/tests/invariants.sql) (accounting invariants, tenant isolation, API-role privileges) | `static` and `accounting-invariants` jobs |
+
+The audit of both is in [audit/2026-10-phase1-audit.md](audit/2026-10-phase1-audit.md).
+
+## Status of the reference monorepo
 
 **Phase 1 — Core Accounting: complete.**
 

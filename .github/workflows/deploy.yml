@@ -1,8 +1,11 @@
 name: Deploy
 
+# Deploys the NestJS API / Next.js web monorepo (apps/). It runs only when
+# started by hand: no hosting target is configured yet, and a push to main used
+# to report a green "Deploy" while skipping migrations and deploying nothing.
+# The live product today is docs/ (GitHub Pages, pages.yml) on Supabase; its
+# database is checked by the supabase job in ci.yml.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Migrations are forward-only and applied before the new code starts, so a
@@ -13,6 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      # Fail before doing anything if the environment is not set up, rather
+      # than skipping the step and reporting success.
+      - name: Check the environment is configured
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HEALTH_URL: ${{ secrets.HEALTH_URL }}
+          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+        run: |
+          missing=""
+          [ -n "$DATABASE_URL" ] || missing="$missing DATABASE_URL"
+          [ -n "$HEALTH_URL" ] || missing="$missing HEALTH_URL"
+          [ -n "$DEPLOY_HOOK_URL" ] || missing="$missing DEPLOY_HOOK_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Deployment is not configured. Missing secrets:$missing"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       # The pnpm version comes from `packageManager` in package.json.
@@ -33,32 +53,26 @@ jobs:
       - name: Apply migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL is not configured for this environment; skipping the migration step."
-            exit 0
-          fi
-          pnpm --filter @zycount/db prisma:deploy
+        run: pnpm --filter @zycount/db prisma:deploy
 
-      # Replace with the platform's own deploy step (Fly, Render, Railway, k8s).
+      # The hosting platform's deploy hook (Fly, Render, Railway…) starts the
+      # release; the smoke test below decides whether it worked.
       - name: Deploy API, workers and web
-        run: echo "Configure the deployment target for this environment."
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
 
       - name: Smoke-test the health endpoint
         env:
           HEALTH_URL: ${{ secrets.HEALTH_URL }}
         run: |
-          if [ -z "$HEALTH_URL" ]; then
-            echo "HEALTH_URL is not configured; skipping the smoke test."
-            exit 0
-          fi
-          for attempt in 1 2 3 4 5; do
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if curl -fsS "$HEALTH_URL" | grep -q '"status":"ok"'; then
               echo "Health check passed."
               exit 0
             fi
-            echo "Attempt $attempt failed; retrying in 10s."
-            sleep 10
+            echo "Attempt $attempt failed; retrying in 15s."
+            sleep 15
           done
-          echo "The deployed API did not report healthy."
+          echo "::error::The deployed API did not report healthy."
           exit 1

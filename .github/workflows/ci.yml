@@ -93,6 +93,31 @@ jobs:
       - name: Accounting invariant suite
         run: pnpm --filter @zycount/api test:int
 
+  # The live product's backend: every migration applied in order to a fresh
+  # Supabase database, then the invariant, tenant-isolation and privilege
+  # suite (supabase/tests/invariants.sql). Inside one transaction, rolled back.
+  supabase:
+    name: Supabase migrations and invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start a local database and apply every migration
+        run: |
+          supabase db start
+          supabase migration up --local
+
+      - name: Invariant suite
+        shell: bash
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 \
+            -c 'begin' -f supabase/tests/invariants.sql -c 'rollback' 2>&1 | tee invariants.log
+          grep -q "INVARIANTS PASSED" invariants.log
+
   build:
     name: Build
     runs-on: ubuntu-latest

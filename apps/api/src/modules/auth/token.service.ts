@@ -117,7 +117,25 @@ export class TokenService {
       );
     }
 
-    if (existing.revokedAt) {
+    if (!existing.revokedAt && existing.expiresAt.getTime() <= Date.now()) {
+      throw new ZycountError(
+        ERROR_CODES.AUTH_TOKEN_EXPIRED,
+        "Your session has expired. Sign in again to continue.",
+      );
+    }
+
+    // Claim the token atomically before issuing its successor. Of two requests
+    // racing with the same token only one can flip revokedAt from null; the
+    // other is treated exactly like a replay, so a stolen token used in
+    // parallel with the real one still ends the family.
+    const claimed = existing.revokedAt
+      ? { count: 0 }
+      : await this.prisma.refreshToken.updateMany({
+          where: { id: existing.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+
+    if (claimed.count === 0) {
       await this.revokeFamily(existing.family);
       throw new ZycountError(
         ERROR_CODES.AUTH_REFRESH_REUSED,
@@ -125,19 +143,7 @@ export class TokenService {
       );
     }
 
-    if (existing.expiresAt.getTime() <= Date.now()) {
-      throw new ZycountError(
-        ERROR_CODES.AUTH_TOKEN_EXPIRED,
-        "Your session has expired. Sign in again to continue.",
-      );
-    }
-
     const refreshToken = await this.issueRefreshToken(existing.userId, client, existing.family);
-
-    await this.prisma.refreshToken.update({
-      where: { id: existing.id },
-      data: { revokedAt: new Date() },
-    });
 
     return { userId: existing.userId, refreshToken };
   }
