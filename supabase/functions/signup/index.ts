@@ -7,7 +7,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
-  "https://gostatementnssitsolution.github.io",
+  "https://hafizramalan.github.io",
   "http://localhost:3000",
   "http://127.0.0.1:8765",
   "http://localhost:8765",
