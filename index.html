@@ -1,0 +1,1168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zycount — Accounting software for Malaysian businesses</title>
+<meta name="description" content="Zycount is double-entry accounting software for Malaysian businesses: invoices, bills, bank reconciliation, financial reports and LHDN e-Invoice in one organised workspace.">
+<meta property="og:title" content="Zycount — Simplify your accounting. See your business clearly.">
+<meta property="og:description" content="Manage invoices, expenses and financial reporting in one organised workspace, built for Malaysian businesses.">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/zycount-mark.svg" type="image/svg+xml">
+<script src="js/zy-theme.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#FFFFFF; --bg-2:#F4F6FA; --card:#FFFFFF; --sunk:#EEF2F8; --rule:#E2E7EF; --rule-2:#EDF0F5;
+  --ink:#0B1630; --ink-2:#45526B; --ink-3:#6B7790;
+  --blue:#2156E8; --blue-2:#1A46C4; --blue-soft:#EAF0FE; --btn:#2156E8; --btn-2:#1A46C4;
+  --navy:#0B1B3F; --navy-2:#122756; --navy-line:#24396B; --on-navy:#C9D3E8;
+  --good:#17784F; --good-soft:#E2F3EA; --warn:#94590A; --warn-soft:#FBF0DF; --bad:#B42335;
+  --shadow:0 1px 2px rgba(11,22,48,.06),0 12px 32px -16px rgba(11,22,48,.22);
+  --r:12px; --wrap:1180px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme]){
+    color-scheme:dark;
+    --bg:#08101F; --bg-2:#0C1528; --card:#111C33; --sunk:#16223C; --rule:#22304D; --rule-2:#1A2742;
+    --ink:#E8EDF6; --ink-2:#AEB9CD; --ink-3:#8290A8;
+    --blue:#6B93FF; --blue-2:#8AABFF; --blue-soft:#17264A; --btn:#2F63F0; --btn-2:#3D70FA;
+    --navy:#060D1D; --navy-2:#0E1A34; --navy-line:#22325A;
+    --good:#4CC08A; --good-soft:#10291F; --warn:#DDA048; --warn-soft:#2A2113; --bad:#EE7085;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 36px -18px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#08101F; --bg-2:#0C1528; --card:#111C33; --sunk:#16223C; --rule:#22304D; --rule-2:#1A2742;
+  --ink:#E8EDF6; --ink-2:#AEB9CD; --ink-3:#8290A8;
+  --blue:#6B93FF; --blue-2:#8AABFF; --blue-soft:#17264A; --btn:#2F63F0; --btn-2:#3D70FA;
+  --navy:#060D1D; --navy-2:#0E1A34; --navy-line:#22325A;
+  --good:#4CC08A; --good-soft:#10291F; --warn:#DDA048; --warn-soft:#2A2113; --bad:#EE7085;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 36px -18px rgba(0,0,0,.6);
+}
+:root[data-theme="dim"]{
+  color-scheme:dark;
+  --bg:#1C2230; --bg-2:#212837; --card:#272F40; --sunk:#2D3648; --rule:#3A4459; --rule-2:#323B4E;
+  --ink:#E4E8F0; --ink-2:#B9C1CF; --ink-3:#939DB0;
+  --blue:#86A6FF; --blue-2:#A0B9FF; --blue-soft:#2C3A5E; --btn:#3A6AF0; --btn-2:#4A77F5;
+  --navy:#161C2A; --navy-2:#202839; --navy-line:#343E55; --on-navy:#C3CBDA;
+  --good:#5CC497; --good-soft:#233D33; --warn:#E0A957; --warn-soft:#3B3223; --bad:#F08496;
+  --shadow:0 1px 2px rgba(0,0,0,.2),0 14px 32px -18px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.6 "IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+img,svg{max-width:100%}
+.mono,.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 24px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--btn);color:#fff;padding:8px 14px;border-radius:8px;z-index:100}
+.skip:focus{left:16px}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
+h1,h2,h3{margin:0;letter-spacing:-.018em;line-height:1.15}
+h2{font-size:clamp(28px,3.4vw,40px);font-weight:600}
+h3{font-size:18px;font-weight:600}
+p{margin:0}
+.eyebrow{display:inline-block;font:600 12px/1 "IBM Plex Mono",monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--blue);margin-bottom:14px}
+.lede{color:var(--ink-2);font-size:17.5px;max-width:600px;margin-top:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:12px 20px;font-weight:600;font-size:15px;text-decoration:none;border:1px solid transparent;transition:background .15s,border-color .15s,transform .15s;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--btn);color:#fff}
+.btn-primary:hover{background:var(--btn-2)}
+.btn-ghost{border-color:var(--rule);background:var(--card);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--ink-3)}
+.btn-line{border-color:rgba(255,255,255,.28);color:#fff;background:transparent}
+.btn-line:hover{border-color:#fff}
+section{padding:96px 0}
+.alt{background:var(--bg-2);border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+.dark{background:var(--navy);color:#fff;border-top:1px solid var(--navy-line);border-bottom:1px solid var(--navy-line)}
+.dark .lede,.dark p{color:var(--on-navy)}
+.dark .eyebrow{color:#8EADFF}
+.head{max-width:700px;margin-bottom:48px}
+.head.center{margin-left:auto;margin-right:auto;text-align:center}
+.head.center .lede{margin-left:auto;margin-right:auto}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:64px;align-items:center}
+.split.flip>:first-child{order:2}
+.checks{list-style:none;padding:0;margin:24px 0 0;display:grid;gap:12px}
+.checks li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;color:var(--ink-2)}
+.checks li b{color:var(--ink);font-weight:600}
+.checks li::before{content:"";width:20px;height:20px;border-radius:50%;margin-top:2px;background:var(--good-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5l3 3 6-7' fill='none' stroke='%2317784F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px no-repeat}
+.dark .checks li{color:var(--on-navy)}
+.dark .checks li b{color:#fff}
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1 "IBM Plex Mono",monospace;padding:5px 8px;border-radius:999px;white-space:nowrap;background:var(--sunk);color:var(--ink-2)}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.blue{background:var(--blue-soft);color:var(--blue)}
+.chip.good::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow)}
+.ico{width:40px;height:40px;border-radius:10px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;flex:none}
+.ico svg{width:21px;height:21px}
+.demo-note{font-size:12.5px;color:var(--ink-3);margin-top:14px}
+
+/* ── nav ── */
+header.site{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--rule)}
+header.site .wrap{display:flex;align-items:center;gap:32px;height:68px}
+.logo{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em;text-decoration:none;color:var(--ink)}
+.logo img{width:30px;height:30px;display:block}
+nav.links{display:flex;gap:26px;font-size:14.5px;color:var(--ink-2)}
+nav.links a{text-decoration:none;padding:6px 0}
+nav.links a:hover{color:var(--ink)}
+.head-cta{margin-left:auto;display:flex;gap:8px;align-items:center}
+.head-cta .login{font-size:14.5px;font-weight:500;text-decoration:none;padding:8px 12px}
+.head-cta .btn{padding:9px 16px;font-size:14.5px}
+.theme-btn{display:grid;width:42px;height:42px;border-radius:10px;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer;place-items:center}
+.theme-btn:hover{border-color:var(--ink-3)}
+.menu-btn{display:none;margin-left:4px;width:42px;height:42px;border-radius:10px;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer;place-items:center}
+.menu-btn svg{width:20px;height:20px}
+.mobile-nav{display:none;border-top:1px solid var(--rule);background:var(--bg);padding:8px 16px 16px}
+.mobile-nav a{display:block;padding:12px 4px;text-decoration:none;border-bottom:1px solid var(--rule-2);font-weight:500}
+.mobile-nav a:last-child{border-bottom:0}
+.mobile-nav.open{display:block}
+
+/* ── hero ── */
+.hero{background:var(--navy);color:#fff;padding:88px 0 96px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/48px 48px,
+  linear-gradient(0deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/48px 48px;
+  mask-image:radial-gradient(ellipse 70% 80% at 70% 40%,#000 30%,transparent 80%);-webkit-mask-image:radial-gradient(ellipse 70% 80% at 70% 40%,#000 30%,transparent 80%)}
+.hero .wrap{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:56px;align-items:center}
+.hero h1{font-size:clamp(38px,5.2vw,62px);font-weight:600;line-height:1.05;letter-spacing:-.025em}
+.hero h1 span{color:#8EADFF}
+.hero .lede{color:var(--on-navy);font-size:18.5px}
+.hero .ctas{display:flex;gap:12px;flex-wrap:wrap;margin:32px 0 26px}
+.hero .fine{display:flex;gap:20px;flex-wrap:wrap;color:#9FB0D0;font-size:13.5px}
+.hero .fine span{display:inline-flex;align-items:center;gap:7px}
+.hero .fine span::before{content:"";width:6px;height:6px;border-radius:50%;background:#4CC08A}
+.stack{position:relative;min-height:440px}
+.stack .panel{position:absolute;color:var(--ink)}
+.s-main{inset:0 6% 64px 0;padding:20px 22px;display:flex;flex-direction:column}
+.s-main .row{display:flex;justify-content:space-between;align-items:center}
+.s-main .title{font-weight:600}
+.s-main .muted{color:var(--ink-3);font-size:12.5px}
+.s-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.s-kpis div{background:var(--sunk);border-radius:10px;padding:10px 12px}
+.s-kpis .k{font-size:11.5px;color:var(--ink-3)}
+.s-kpis .v{font:600 15px "IBM Plex Mono",monospace;margin-top:2px}
+.s-bars{flex:1;display:flex;align-items:flex-end;gap:10px;padding:10px 4px 0;border-top:1px solid var(--rule-2);min-height:120px}
+.s-bars i{flex:1;background:var(--blue);border-radius:4px 4px 0 0;opacity:.9}
+.s-bars i:nth-child(odd){opacity:.55}
+.s-inv{right:0;bottom:0;width:58%;padding:16px 18px}
+.s-inv .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.s-inv .amt{font:600 22px "IBM Plex Mono",monospace;margin:8px 0 2px}
+.s-inv .muted{font-size:12.5px;color:var(--ink-3)}
+
+/* ── dashboard preview ── */
+.app{overflow:hidden}
+.app-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--rule);background:var(--sunk)}
+.app-bar i{width:10px;height:10px;border-radius:50%;background:var(--rule)}
+.app-bar span{margin-left:12px;font:12px "IBM Plex Mono",monospace;color:var(--ink-3);background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:4px 10px;flex:1;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-body{display:grid;grid-template-columns:200px minmax(0,1fr)}
+.app-side{border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px;color:var(--ink-2)}
+.app-side b{display:flex;align-items:center;gap:10px;font-weight:500;padding:8px 10px;border-radius:8px}
+.app-side b svg{width:17px;height:17px;flex:none}
+.app-side b.on{background:var(--blue-soft);color:var(--blue)}
+.app-main{padding:22px;display:grid;gap:16px;min-width:0}
+.app-main .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.app-main .top h3{font-size:20px}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tile{border:1px solid var(--rule);border-radius:12px;padding:14px 16px;background:var(--card)}
+.tile .k{font-size:12.5px;color:var(--ink-3)}
+.tile .v{font:600 19px "IBM Plex Mono",monospace;margin:4px 0 2px;white-space:nowrap}
+.tile .s{font-size:12px;color:var(--ink-3)}
+.dash-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+.box{border:1px solid var(--rule);border-radius:12px;padding:16px 18px;background:var(--card);min-width:0}
+.box h4{margin:0;font-size:14.5px;font-weight:600}
+.box .sub{font-size:12px;color:var(--ink-3);margin-bottom:8px}
+.legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+table.tx{width:100%;border-collapse:collapse;font-size:13.5px}
+table.tx td{padding:9px 0;border-bottom:1px solid var(--rule-2);vertical-align:top}
+table.tx tr:last-child td{border-bottom:0}
+table.tx .ref{font:500 12px "IBM Plex Mono",monospace;color:var(--blue);display:block}
+table.tx .what{color:var(--ink-3);font-size:12.5px}
+table.tx .n{text-align:right;font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+.neg{color:var(--ink-2)}
+
+/* ── features ── */
+.feats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.feat{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);padding:26px;display:flex;flex-direction:column;gap:14px;transition:border-color .15s,box-shadow .15s}
+.feat:hover{border-color:color-mix(in srgb,var(--blue) 40%,var(--rule));box-shadow:var(--shadow)}
+.feat p{color:var(--ink-2);font-size:14.5px}
+.feat .more{margin-top:auto;font-size:13.5px;font-weight:600;color:var(--blue);text-decoration:none}
+.roadmap{margin-top:22px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:14px;color:var(--ink-3)}
+
+/* ── invoice ── */
+.inv{padding:26px 28px}
+.inv-h{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding-bottom:18px;border-bottom:1px solid var(--rule)}
+.inv-h .co{display:flex;gap:12px;align-items:center}
+.inv-h .co img{width:36px;height:36px}
+.inv-h .co b{display:block}
+.inv-h .co span,.inv-meta span{font-size:12.5px;color:var(--ink-3)}
+.inv-h .doc{text-align:right}
+.inv-h .doc b{font-size:20px;letter-spacing:.04em}
+.inv-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:16px 0;border-bottom:1px solid var(--rule)}
+.inv-meta b{display:block;font-weight:500;font-size:14px}
+table.lines{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+table.lines th{text-align:left;font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding:12px 0;border-bottom:1px solid var(--rule)}
+table.lines td{padding:11px 0;border-bottom:1px solid var(--rule-2)}
+table.lines .n{text-align:right;font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+.totals{margin-left:auto;width:min(280px,100%);margin-top:12px;font-size:14px}
+.totals div{display:flex;justify-content:space-between;padding:5px 0}
+.totals .grand{border-top:2px solid var(--ink);margin-top:6px;padding-top:10px;font-weight:700;font-size:16px}
+.inv-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid var(--rule)}
+.posts{margin-top:16px;padding:14px 18px;font-size:13px}
+.posts .hd{display:flex;justify-content:space-between;margin-bottom:6px;font-weight:600;font-size:13.5px}
+.posts table{width:100%;border-collapse:collapse}
+.posts td{padding:4px 0;border-bottom:1px dashed var(--rule)}
+.posts tr:last-child td{border-bottom:0}
+.posts .n{text-align:right;font-family:"IBM Plex Mono",monospace}
+
+/* ── trail ── */
+.trail{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--rule);border-radius:var(--r);background:var(--card);overflow:hidden}
+.trail button{all:unset;box-sizing:border-box;cursor:pointer;padding:18px 16px;border-right:1px solid var(--rule);min-height:120px;display:flex;flex-direction:column;gap:8px}
+.trail button:last-child{border-right:0}
+.trail button:hover{background:var(--sunk)}
+.trail button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.trail button[aria-selected="true"]{background:var(--blue-soft)}
+.trail button[aria-selected="true"] .step{color:var(--blue)}
+.trail .step{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);letter-spacing:.06em}
+.trail b{font-weight:600;font-size:14.5px}
+.trail span.ref{font:12px "IBM Plex Mono",monospace;color:var(--ink-2)}
+.trail-detail{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:24px;background:var(--card);border:1px solid var(--rule);border-radius:var(--r);padding:24px}
+.trail-detail p{color:var(--ink-2);margin-top:8px}
+.trail-detail .pane{background:var(--sunk);border-radius:10px;padding:14px 16px;font-size:13.5px}
+.pane table{width:100%;border-collapse:collapse}
+.pane td{padding:5px 0;border-bottom:1px dashed var(--rule)}
+.pane tr:last-child td{border-bottom:0}
+.pane .n{text-align:right;font-family:"IBM Plex Mono",monospace}
+
+/* ── reports ── */
+.rep{overflow:hidden}
+.rep-tabs{display:flex;border-bottom:1px solid var(--rule);background:var(--sunk);overflow-x:auto}
+.rep-tabs button{all:unset;cursor:pointer;padding:13px 18px;font-size:14px;font-weight:500;color:var(--ink-2);border-bottom:2px solid transparent;white-space:nowrap}
+.rep-tabs button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.rep-tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--blue);background:var(--card)}
+.rep-body{padding:6px 22px 20px}
+.rep-meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 0;color:var(--ink-3);font-size:12.5px;border-bottom:1px solid var(--rule)}
+table.st{width:100%;border-collapse:collapse;font-size:14px}
+table.st td{padding:7px 0;border-bottom:1px solid var(--rule-2)}
+table.st td.n{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.st tr.sub td{font-weight:600;border-bottom:1px solid var(--rule)}
+table.st tr.grand td{font-weight:700;border-top:2px solid var(--ink);border-bottom:3px double var(--ink);padding-top:10px}
+table.st tr.grp td{padding-top:16px;font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);border-bottom:0}
+table.st td.ind{padding-left:14px}
+.proof{margin-top:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--good-soft);color:var(--good);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:500}
+
+/* ── mobile ── */
+.phone{width:290px;margin:0 auto;border-radius:42px;background:#0B1226;padding:12px;box-shadow:0 30px 60px -24px rgba(11,22,48,.55),inset 0 0 0 2px #26324F}
+.phone-in{border-radius:32px;background:var(--bg);overflow:hidden;color:var(--ink);min-height:560px;display:flex;flex-direction:column}
+.ph-top{display:flex;justify-content:space-between;align-items:center;padding:14px 18px 10px;font-size:12px;color:var(--ink-3)}
+.ph-top .notch{width:84px;height:22px;border-radius:12px;background:#0B1226}
+.ph-h{padding:6px 18px 12px;display:flex;align-items:center;gap:10px}
+.ph-h img{width:26px;height:26px}
+.ph-h b{font-size:16px}
+.ph-card{margin:0 14px 12px;border:1px solid var(--rule);border-radius:16px;padding:14px;background:var(--card)}
+.ph-card .k{font-size:12px;color:var(--ink-3)}
+.ph-card .v{font:600 22px "IBM Plex Mono",monospace;margin-top:2px}
+.ph-shot{height:118px;border-radius:12px;margin:10px 0;background:
+  repeating-linear-gradient(0deg,transparent 0 13px,var(--rule) 13px 14px) 18px 16px/calc(100% - 36px) calc(100% - 32px) no-repeat,var(--sunk);
+  border:1px dashed var(--ink-3);display:grid;place-items:center;font-size:12px;color:var(--ink-3)}
+.ph-fields{display:grid;gap:6px;font-size:12.5px}
+.ph-fields div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--rule);padding-bottom:5px}
+.ph-fields div span:last-child{font-family:"IBM Plex Mono",monospace}
+.ph-btn{margin:auto 14px 14px;background:var(--btn);color:#fff;text-align:center;border-radius:12px;padding:12px;font-weight:600;font-size:14px}
+
+/* ── industries ── */
+.inds{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.indus{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);padding:22px 20px;display:flex;flex-direction:column;gap:12px}
+.indus p{font-size:14px;color:var(--ink-2)}
+.ind-photo{margin-top:28px;border-radius:16px;overflow:hidden;aspect-ratio:21/7;background:var(--sunk)}
+.ind-photo img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* ── pricing ── */
+.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch}
+.plan{background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:18px;position:relative}
+.plan.pop{border:2px solid var(--blue);box-shadow:var(--shadow)}
+.plan .badge{position:absolute;top:-12px;left:28px;background:var(--btn);color:#fff;font:600 11.5px/1 "IBM Plex Mono",monospace;padding:6px 10px;border-radius:999px}
+.plan .price{display:flex;align-items:baseline;gap:6px}
+.plan .price b{font:600 34px "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.plan .price span{color:var(--ink-3);font-size:14px}
+.plan .price .tba{font:600 20px "IBM Plex Sans",sans-serif;letter-spacing:-.01em;color:var(--ink-2)}
+.plan .desc{color:var(--ink-2);font-size:14.5px}
+.plan .yearly{margin-top:4px;font-size:13.5px;color:var(--ink-3)}
+.plan ul{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14.5px;color:var(--ink-2)}
+.plan li{display:flex;gap:10px}
+.plan li::before{content:"✓";color:var(--good);font-weight:700}
+.plan .btn{margin-top:auto}
+.price-note{margin-top:20px;text-align:center;font-size:13.5px;color:var(--ink-3)}
+
+/* ── security ── */
+.sec-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:64px;align-items:center}
+.shield{position:relative;display:grid;place-items:center;min-height:360px}
+.shield svg{width:min(300px,80%);height:auto}
+.sec-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px}
+.sec-cards div{border:1px solid var(--navy-line);background:var(--navy-2);border-radius:12px;padding:16px}
+.sec-cards b{display:block;color:#fff;font-weight:600;margin-bottom:4px}
+.sec-cards span{font-size:13.5px;color:var(--on-navy)}
+
+/* ── documents ── */
+.files{overflow:hidden}
+.files-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--rule)}
+.file{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 20px;border-bottom:1px solid var(--rule-2)}
+.file:last-child{border-bottom:0}
+.file .ft{width:40px;height:46px;border-radius:7px;display:grid;place-items:center;font:600 10.5px "IBM Plex Mono",monospace;color:#fff}
+.file b{display:block;font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file span.m{font-size:12.5px;color:var(--ink-3)}
+
+/* ── steps ── */
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;counter-reset:s;position:relative}
+.step-c{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);padding:28px;position:relative}
+.step-c .n{font:600 13px "IBM Plex Mono",monospace;color:var(--blue);background:var(--blue-soft);border-radius:8px;padding:6px 10px;display:inline-block;margin-bottom:16px}
+.step-c p{color:var(--ink-2);font-size:14.5px;margin-top:8px}
+.steps-cta{text-align:center;margin-top:32px}
+
+/* ── testimonials ── */
+.quotes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.quote{background:var(--card);border:1px dashed var(--ink-3);border-radius:var(--r);padding:24px;display:flex;flex-direction:column;gap:18px}
+.quote blockquote{margin:0;color:var(--ink-2);font-size:15px}
+.quote .who{display:flex;align-items:center;gap:12px;margin-top:auto}
+.quote .av{width:40px;height:40px;border-radius:50%;background:var(--sunk);display:grid;place-items:center;font-weight:600;color:var(--ink-3)}
+.quote .who b{display:block;font-size:14px}
+.quote .who span{font-size:12.5px;color:var(--ink-3)}
+
+/* ── faq ── */
+.faq{max-width:820px;margin:0 auto}
+.faq details{border-bottom:1px solid var(--rule);padding:18px 0}
+.faq summary{cursor:pointer;font-weight:600;font-size:16px;list-style:none;display:flex;justify-content:space-between;gap:20px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:"IBM Plex Mono",monospace;color:var(--ink-3);font-size:18px;line-height:1}
+.faq details[open] summary::after{content:"−"}
+.faq p{margin-top:10px;color:var(--ink-2)}
+
+/* ── final cta ── */
+.final{background:var(--navy);color:#fff;border:1px solid var(--navy-line);border-radius:22px;padding:64px;display:grid;grid-template-columns:minmax(0,1.3fr) auto;gap:32px;align-items:center;position:relative;overflow:hidden}
+.final::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px) 0 0/40px 40px,
+  linear-gradient(0deg,rgba(255,255,255,.04) 1px,transparent 1px) 0 0/40px 40px;
+  mask-image:linear-gradient(90deg,transparent,#000);-webkit-mask-image:linear-gradient(90deg,transparent,#000)}
+.final>*{position:relative}
+.final p{color:var(--on-navy);margin-top:12px;max-width:560px}
+.final .ctas{display:flex;gap:12px;flex-wrap:wrap}
+
+/* ── footer ── */
+footer.site{background:var(--navy);color:var(--on-navy);padding:64px 0 36px;margin-top:96px;font-size:14px}
+footer.site .wrap{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr));gap:36px}
+footer.site .logo{color:#fff;display:inline-flex;padding:0}
+footer.site h4{margin:0 0 14px;font-size:14px;font-weight:600;color:#fff}
+footer.site a{display:block;text-decoration:none;padding:4px 0;color:var(--on-navy)}
+footer.site a:hover{color:#fff}
+footer.site .legal{grid-column:1/-1;border-top:1px solid var(--navy-line);padding-top:22px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:13px;color:#8D9BBA}
+
+/* ── reveal ── */
+.js .reveal{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}
+.js .reveal.in{opacity:1;transform:none}
+
+/* ── responsive ── */
+@media (max-width:1060px){
+  .inds{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:960px){
+  nav.links,.head-cta .login{display:none}
+  .menu-btn{display:grid}
+  section{padding:76px 0}
+  .hero{padding:64px 0 72px}
+  .hero .wrap,.split,.sec-grid,.dash-grid,.trail-detail{grid-template-columns:1fr}
+  .split.flip>:first-child{order:0}
+  .split{gap:40px}
+  .feats,.plans,.quotes,.steps{grid-template-columns:1fr 1fr}
+  .app-body{grid-template-columns:1fr}
+  .app-side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--rule);padding:10px}
+  .app-side b{white-space:nowrap}
+  .trail{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .trail button:nth-child(3){border-right:0}
+  .trail button:nth-child(-n+3){border-bottom:1px solid var(--rule)}
+  .final{grid-template-columns:1fr;padding:44px 32px}
+  footer.site .wrap{grid-template-columns:1fr 1fr}
+  .shield{min-height:260px}
+}
+@media (max-width:640px){
+  .wrap{padding:0 16px}
+  section{padding:64px 0}
+  .head-cta .btn{padding:8px 12px;font-size:14px}
+  .stack{min-height:420px}
+  .s-main{inset:0 0 120px 0}
+  .s-inv{width:86%}
+  .s-kpis{grid-template-columns:1fr 1fr}
+  .s-kpis div:nth-child(3){display:none}
+  .feats,.plans,.quotes,.steps,.inds,.sec-cards{grid-template-columns:1fr}
+  .tiles{grid-template-columns:1fr 1fr}
+  .tile .v{font-size:16px}
+  .app-main{padding:16px}
+  .inv{padding:20px 18px}
+  .inv-meta{grid-template-columns:1fr 1fr}
+  .trail{grid-template-columns:1fr 1fr}
+  .trail button{min-height:104px;border-right:1px solid var(--rule)!important;border-bottom:1px solid var(--rule)}
+  .trail button:nth-child(even){border-right:0!important}
+  .trail button:nth-child(n+5){border-bottom:0}
+  .rep-body{padding:4px 14px 16px}
+  .final{padding:36px 22px;border-radius:16px}
+  footer.site .wrap{grid-template-columns:1fr}
+  .hide-sm{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{transition:none!important;animation:none!important}
+  .js .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- Icons, referenced with <use href="#i-…"> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-invoice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></symbol>
+    <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></symbol>
+    <symbol id="i-bank" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-5 9 5M5 9v9M19 9v9M9.5 9v9M14.5 9v9M3 20h18"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c1.8.8 3 2.6 3.5 5.2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 7H6.3"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 6.2l2.1 2.1M17.7 15.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 17.8l2.1-2.1M17.7 8.3l2.1-2.1"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 2 3s3-1.3 3-3c0 1.7 1.3 3 3 3s2-1.3 2-3"/><path d="M10 20v-5h4v5"/></symbol>
+    <symbol id="i-truck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h12v10H2zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></symbol>
+    <symbol id="i-factory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10l5 3V10l5 3V5h4l1 15z"/><path d="M3 20h18"/></symbol>
+    <symbol id="i-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2M3 12h18"/></symbol>
+    <symbol id="i-food" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8M5 3v5a2 2 0 004 0V3M7 11v10M17 21V3c-2 1-3 3.5-3 7h3"/></symbol>
+    <symbol id="i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M17 21h4v-4M14 18v3"/></symbol>
+  </defs>
+</svg>
+
+<!-- ═════════ 1 · NAVIGATION ═════════ -->
+<header class="site">
+  <div class="wrap">
+    <a class="logo" href="#main" aria-label="Zycount home"><img src="assets/zycount-mark.svg" alt="" width="30" height="30">Zycount</a>
+    <nav class="links" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#invoicing">Invoicing</a>
+      <a href="#reports">Reports</a>
+      <a href="#personal">Personal</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#security">Security</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="head-cta">
+      <button class="theme-btn" id="theme-btn" type="button" aria-label="Theme"></button>
+      <a class="login" href="login.html">Log in</a>
+      <a class="btn btn-primary" href="login.html#register">Get Started</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Main (mobile)">
+    <a href="#features">Features</a>
+    <a href="#invoicing">Invoicing</a>
+    <a href="#reports">Reports</a>
+    <a href="#personal">Personal</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#security">Security</a>
+    <a href="#faq">FAQ</a>
+    <a href="login.html">Log in</a>
+  </nav>
+</header>
+
+<main id="main">
+
+<!-- ═════════ 2 · HERO ═════════ -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Accounting software for Malaysian businesses</span>
+      <h1 id="hero-title">Simplify Your Accounting. <span>See Your Business Clearly.</span></h1>
+      <p class="lede">Manage invoices, expenses and financial reporting in one organised workspace — with every figure traceable to the document that created it.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="login.html#register">Get Started</a>
+        <a class="btn btn-line" href="#features">Explore Features</a>
+      </div>
+      <div class="fine"><span>MYR, SST &amp; LHDN e-Invoice ready</span><span>Double-entry, balanced to the sen</span><span>Export your data any time</span></div>
+    </div>
+
+    <div class="stack" aria-label="Preview of the Zycount workspace with demo figures">
+      <div class="panel s-main">
+        <div class="row"><span class="title">Business overview</span><span class="chip">Demo company</span></div>
+        <span class="muted">Zycount Demo Trading Sdn Bhd · Jan–Aug 2026</span>
+        <div class="s-kpis">
+          <div><div class="k">Revenue</div><div class="v">1.36m</div></div>
+          <div><div class="k">Net profit</div><div class="v">149k</div></div>
+          <div><div class="k">Cash &amp; bank</div><div class="v">266k</div></div>
+        </div>
+        <div class="s-bars" aria-hidden="true">
+          <i style="height:62%"></i><i style="height:58%"></i><i style="height:59%"></i><i style="height:57%"></i><i style="height:74%"></i><i style="height:65%"></i>
+          <i style="height:65%"></i><i style="height:60%"></i><i style="height:69%"></i><i style="height:62%"></i><i style="height:90%"></i><i style="height:75%"></i>
+          <i style="height:87%"></i><i style="height:73%"></i><i style="height:75%"></i><i style="height:66%"></i>
+        </div>
+      </div>
+      <div class="panel s-inv">
+        <div class="row"><span class="mono" style="font-size:13px;color:var(--blue)">INV-2026-000206</span><span class="chip good">Paid</span></div>
+        <div class="amt">RM 26,435.60</div>
+        <div class="muted">Posted to the ledger · Dr = Cr · receipt matched to bank</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 3 · DASHBOARD PREVIEW ═════════ -->
+<section class="alt" id="dashboard" aria-labelledby="dash-title">
+  <div class="wrap">
+    <div class="head center reveal">
+      <span class="eyebrow">The workspace</span>
+      <h2 id="dash-title">Your whole business on one screen.</h2>
+      <p class="lede">Revenue, expenses, profit and cash — read from the same ledger your reports use, so the dashboard and the balance sheet never disagree.</p>
+    </div>
+
+    <div class="panel app reveal" role="img" aria-label="Zycount dashboard showing demo KPIs, a revenue and expense chart and recent transactions">
+      <div class="app-bar" aria-hidden="true"><i></i><i></i><i></i><span>hafizramalan.github.io/zycount/app.html#dashboard</span></div>
+      <div class="app-body">
+        <div class="app-side" aria-hidden="true">
+          <b class="on"><svg><use href="#i-home"/></svg>Dashboard</b>
+          <b><svg><use href="#i-invoice"/></svg>Sales</b>
+          <b><svg><use href="#i-cart"/></svg>Purchases</b>
+          <b><svg><use href="#i-bank"/></svg>Banking</b>
+          <b><svg><use href="#i-chart"/></svg>Reports</b>
+          <b><svg><use href="#i-gear"/></svg>Settings</b>
+        </div>
+        <div class="app-main">
+          <div class="top"><h3>Dashboard</h3><span class="chip">Demo data · 1 Jan – 31 Aug 2026</span></div>
+          <div class="tiles">
+            <div class="tile"><div class="k">Revenue YTD</div><div class="v">RM 1,362,498</div><div class="s">Sales of goods &amp; services</div></div>
+            <div class="tile"><div class="k">Expenses YTD</div><div class="v">RM 1,213,469</div><div class="s">Cost of sales &amp; overheads</div></div>
+            <div class="tile"><div class="k">Net profit YTD</div><div class="v">RM 149,029</div><div class="s">10.9% net margin</div></div>
+            <div class="tile"><div class="k">Cash &amp; bank</div><div class="v">RM 266,641</div><div class="s">As at 31 Aug 2026</div></div>
+          </div>
+          <div class="dash-grid">
+            <div class="box">
+              <h4>Revenue vs expenses</h4>
+              <div class="sub">Monthly, RM</div>
+              <svg id="chart" viewBox="0 0 440 220" aria-hidden="true"></svg>
+              <div class="legend"><span><i style="background:var(--blue)"></i>Revenue</span><span><i style="background:var(--ink-3);opacity:.55"></i>Expenses</span><span><i style="background:var(--good)"></i>Profit</span></div>
+            </div>
+            <div class="box">
+              <h4>Recent transactions</h4>
+              <div class="sub">Sample entries for illustration</div>
+              <table class="tx">
+                <tr><td><span class="ref">OR-2026-000188</span><span class="what">Receipt · Customer A · 31 Aug</span></td><td class="n">26,435.60</td></tr>
+                <tr><td><span class="ref">PV-2026-000097</span><span class="what">Payment · Supplier B · 30 Aug</span></td><td class="n neg">(18,200.00)</td></tr>
+                <tr><td><span class="ref">BL-2026-000142</span><span class="what">Bill · Utilities · 29 Aug</span></td><td class="n neg">(2,961.40)</td></tr>
+                <tr><td><span class="ref">INV-2026-000206</span><span class="what">Invoice · Customer A · 27 Aug</span></td><td class="n">26,435.60</td></tr>
+                <tr><td><span class="ref">JV-2026-000201</span><span class="what">Depreciation · August</span></td><td class="n neg">(1,800.00)</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="demo-note" style="text-align:center">All figures are from Zycount's demo company and sample entries — not real customer data.</p>
+  </div>
+</section>
+
+<!-- ═════════ 4 · FEATURES ═════════ -->
+<section id="features" aria-labelledby="feat-title">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Features</span>
+      <h2 id="feat-title">Everything the books need, in one place.</h2>
+      <p class="lede">Each module posts through the same accounting engine into the same ledger — no exports between systems, and nothing to reconcile against itself.</p>
+    </div>
+    <div class="feats">
+      <article class="feat reveal">
+        <span class="ico"><svg><use href="#i-invoice"/></svg></span>
+        <h3>Invoicing &amp; receipts</h3>
+        <p>Quotations, invoices, credit and debit notes, receipts with knock-off, customer statements and receivables aging.</p>
+        <a class="more" href="#invoicing">See invoicing →</a>
+      </article>
+      <article class="feat reveal">
+        <span class="ico"><svg><use href="#i-receipt"/></svg></span>
+        <h3>Bills &amp; expenses</h3>
+        <p>Supplier bills, payments, AR/AP contra, a cash book for petty cash — and snap-a-receipt capture that reads the document for you.</p>
+        <a class="more" href="#documents">See document capture →</a>
+      </article>
+      <article class="feat reveal">
+        <span class="ico"><svg><use href="#i-chart"/></svg></span>
+        <h3>Financial reports</h3>
+        <p>Trial balance, profit &amp; loss and balance sheet with period comparison and CSV export — each figure drills to the ledger.</p>
+        <a class="more" href="#reports">See reports →</a>
+      </article>
+      <article class="feat reveal">
+        <span class="ico"><svg><use href="#i-bank"/></svg></span>
+        <h3>Bank reconciliation</h3>
+        <p>Import bank statements, match lines to receipts and payments, and settle the difference before you close the month.</p>
+        <a class="more" href="#trail">See how it posts →</a>
+      </article>
+      <article class="feat reveal">
+        <span class="ico"><svg><use href="#i-users"/></svg></span>
+        <h3>Users &amp; access</h3>
+        <p>Invite your team with one of ten roles — from Admin and Accountant to Auditor and Read-only — enforced on every action.</p>
+        <a class="more" href="#security">See controls →</a>
+      </article>
+      <article class="feat reveal">
+        <span class="ico"><svg><use href="#i-qr"/></svg></span>
+        <h3>LHDN MyInvois e-Invoice</h3>
+        <p>Submit invoices to MyInvois, track validation, cancel within the allowed window and print the validated QR code.</p>
+        <a class="more" href="#invoicing">See the invoice →</a>
+      </article>
+    </div>
+    <div class="roadmap reveal"><span>On the roadmap:</span><span class="chip warn">Payroll · EPF, SOCSO, EIS, PCB</span><span class="chip warn">Inventory</span><span class="chip warn">Fixed assets</span></div>
+  </div>
+</section>
+
+<!-- ═════════ 5 · INVOICING ═════════ -->
+<section class="alt" id="invoicing" aria-labelledby="inv-title">
+  <div class="wrap split">
+    <div class="reveal">
+      <span class="eyebrow">Invoicing</span>
+      <h2 id="inv-title">Professional invoices, posted the moment you issue them.</h2>
+      <p class="lede">Create an invoice once. Zycount numbers it, works out SST, posts the double entry and keeps the receipt, the e-Invoice status and the ledger linked to it.</p>
+      <ul class="checks">
+        <li><span><b>Gap-free numbering</b> — per company, per year, editable to match your existing series.</span></li>
+        <li><span><b>See the journal before it posts</b> — account by account, proved to balance.</span></li>
+        <li><span><b>Track every payment</b> — receipts knock off invoices and feed customer statements and aging.</span></li>
+        <li><span><b>Print or download PDF</b> — and submit to LHDN MyInvois from the same screen.</span></li>
+      </ul>
+    </div>
+
+    <div class="reveal">
+      <div class="panel inv" aria-label="Example sales invoice with demo figures">
+        <div class="inv-h">
+          <div class="co"><img src="assets/zycount-mark.svg" alt="" width="36" height="36"><div><b>Zycount Demo Trading Sdn Bhd</b><span>Demo company · Kuala Lumpur</span></div></div>
+          <div class="doc"><b>INVOICE</b><div class="mono" style="font-size:13px;color:var(--ink-3)">INV-2026-000206</div></div>
+        </div>
+        <div class="inv-meta">
+          <div><span>Bill to</span><b>Customer A</b></div>
+          <div><span>Date</span><b>27 Aug 2026</b></div>
+          <div><span>Terms</span><b>30 days</b></div>
+        </div>
+        <table class="lines">
+          <thead><tr><th>Description</th><th class="n hide-sm">Tax</th><th class="n">Amount (RM)</th></tr></thead>
+          <tbody>
+            <tr><td>Goods supplied</td><td class="n hide-sm">ST 5%</td><td class="n">22,096.62</td></tr>
+            <tr><td>Installation services</td><td class="n hide-sm">SV 8%</td><td class="n">3,013.18</td></tr>
+          </tbody>
+        </table>
+        <div class="totals">
+          <div><span>Subtotal</span><span class="num">25,109.80</span></div>
+          <div><span>SST</span><span class="num">1,325.80</span></div>
+          <div class="grand"><span>Total</span><span class="num">RM 26,435.60</span></div>
+        </div>
+        <div class="inv-foot"><span class="chip good">Paid · OR-2026-000188</span><span class="chip blue">e-Invoice: Valid</span></div>
+      </div>
+      <div class="panel posts" aria-label="Journal entry the invoice posts">
+        <div class="hd"><span>Posts as JV-2026-000206</span><span style="color:var(--good)">Balanced</span></div>
+        <table>
+          <tr><td>Dr 1150 Accounts Receivable</td><td class="n">26,435.60</td></tr>
+          <tr><td>Cr 4110 Sales — Goods</td><td class="n">22,096.62</td></tr>
+          <tr><td>Cr 4120 Sales — Services</td><td class="n">3,013.18</td></tr>
+          <tr><td>Cr 2150 SST Output Tax</td><td class="n">1,325.80</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it posts: the invoice followed all the way to the statements -->
+<section id="trail" aria-labelledby="trail-title" style="padding-bottom:40px">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">How a transaction posts</span>
+      <h2 id="trail-title">One invoice. Six places it shows up. All of them agree.</h2>
+      <p class="lede">Every document runs through the accounting engine, so each figure in a statement walks back to the invoice that made it. Choose a step.</p>
+    </div>
+    <div class="trail reveal" role="tablist" aria-label="Posting steps" id="trail-tabs"></div>
+    <div class="trail-detail" id="trail-detail" role="tabpanel" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ═════════ 6 · REPORTS ═════════ -->
+<section id="reports" aria-labelledby="rep-title">
+  <div class="wrap split flip">
+    <div class="reveal">
+      <span class="eyebrow">Financial reporting</span>
+      <h2 id="rep-title">Clear reports. Better decisions.</h2>
+      <p class="lede">Statements are built from posted entries, not keyed in. Assets equal liabilities plus equity, debits equal credits — and the report shows you the proof.</p>
+      <ul class="checks">
+        <li><span><b>Profit &amp; loss</b> with period comparison</span></li>
+        <li><span><b>Balance sheet</b> as at any date</span></li>
+        <li><span><b>Trial balance</b> and general ledger, drill-down to the journal</span></li>
+        <li><span><b>Aging &amp; statements</b> for customers and suppliers, CSV export</span></li>
+      </ul>
+    </div>
+    <div class="panel rep reveal">
+      <div class="rep-tabs" role="tablist" aria-label="Statements" id="rep-tabs">
+        <button role="tab" id="tab-pl" aria-selected="true" aria-controls="rep-body" data-rep="pl">Profit &amp; loss</button>
+        <button role="tab" id="tab-bs" aria-selected="false" aria-controls="rep-body" data-rep="bs" tabindex="-1">Balance sheet</button>
+        <button role="tab" id="tab-tb" aria-selected="false" aria-controls="rep-body" data-rep="tb" tabindex="-1">Trial balance</button>
+      </div>
+      <div class="rep-body" id="rep-body" role="tabpanel" aria-labelledby="tab-pl"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 7 · MOBILE ═════════ -->
+<section class="alt" id="mobile" aria-labelledby="mob-title">
+  <div class="wrap split">
+    <div class="reveal">
+      <span class="eyebrow">On your phone</span>
+      <h2 id="mob-title">Your books, wherever the receipt is.</h2>
+      <p class="lede">Zycount runs in your phone's browser — nothing to install. Check the numbers between meetings, and photograph a receipt the moment you get it.</p>
+      <ul class="checks">
+        <li><span><b>Snap with the camera</b> — the receipt is read into a draft bill or expense for you to check.</span></li>
+        <li><span><b>The photo stays with the entry</b> as evidence for your accountant and auditor.</span></li>
+        <li><span><b>Same books, same permissions</b> as on your desktop.</span></li>
+      </ul>
+    </div>
+    <div class="reveal">
+      <div class="phone" role="img" aria-label="Phone showing a receipt being captured into a draft bill, with demo values">
+        <div class="phone-in" aria-hidden="true">
+          <div class="ph-top"><span>9:41</span><span class="notch"></span><span>5G</span></div>
+          <div class="ph-h"><img src="assets/zycount-mark.svg" alt="" width="26" height="26"><b>Capture receipt</b></div>
+          <div class="ph-card">
+            <div class="ph-shot">receipt photo</div>
+            <div class="ph-fields">
+              <div><span>Supplier</span><span>Kedai Elektrik</span></div>
+              <div><span>Date</span><span>29/08/2026</span></div>
+              <div><span>Total</span><span>RM 186.50</span></div>
+              <div><span>Account</span><span>6230 Repairs</span></div>
+            </div>
+          </div>
+          <div class="ph-card"><div class="k">Cash &amp; bank · demo</div><div class="v">RM 266,641</div></div>
+          <div class="ph-btn">Save as draft bill</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 8 · INDUSTRIES ═════════ -->
+<section id="industries" aria-labelledby="ind-title">
+  <div class="wrap">
+    <div class="head center reveal">
+      <span class="eyebrow">Who it's for</span>
+      <h2 id="ind-title">Built for how Malaysian businesses trade.</h2>
+      <p class="lede">From a single shop to a growing group of companies, the same engine fits the way you buy, sell and get paid.</p>
+    </div>
+    <div class="inds">
+      <article class="indus reveal"><span class="ico"><svg><use href="#i-store"/></svg></span><h3>Retail</h3><p>Daily sales, cash book for the till and petty cash, and SST on every sale.</p></article>
+      <article class="indus reveal"><span class="ico"><svg><use href="#i-truck"/></svg></span><h3>Trading</h3><p>Quotation to invoice to receipt, supplier bills and AR/AP contra for customers who also supply you.</p></article>
+      <article class="indus reveal"><span class="ico"><svg><use href="#i-factory"/></svg></span><h3>Manufacturing</h3><p>Purchases, payables aging and cost of sales tracked to the ledger month by month.</p></article>
+      <article class="indus reveal"><span class="ico"><svg><use href="#i-brief"/></svg></span><h3>Services</h3><p>Service-tax invoices, receipts and customer statements that show who owes what.</p></article>
+      <article class="indus reveal"><span class="ico"><svg><use href="#i-food"/></svg></span><h3>F&amp;B</h3><p>Snap supplier receipts as they arrive and reconcile card and bank settlements.</p></article>
+    </div>
+    <div class="ind-photo" id="ind-photo" hidden></div>
+  </div>
+</section>
+
+<!-- Personal books -->
+<section class="alt" id="personal" aria-labelledby="personal-title">
+  <div class="wrap split">
+    <div class="reveal">
+      <span class="eyebrow">Personal books</span>
+      <h2 id="personal-title">Your own money, kept as carefully as a company's.</h2>
+      <p class="lede">Zycount isn't only for businesses. Open personal books to see where your money goes, what you've saved and what you owe — with the same double-entry engine underneath.</p>
+      <ul class="checks">
+        <li><span><b>Cash, bank, savings and e-wallets</b> — every account in one place.</span></li>
+        <li><span><b>Loans and credit cards</b> — balances that go down as you pay.</span></li>
+        <li><span><b>Everyday spending categories</b> — food, transport, bills, personal care and more.</span></li>
+        <li><span><b>Keep business and personal apart</b> — switch between your books from the top bar.</span></li>
+      </ul>
+      <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-primary" href="login.html#register-personal">Start personal books</a>
+      </div>
+    </div>
+    <div class="panel reveal" style="padding:22px 24px" aria-label="Example personal books with sample figures">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b>Net worth</b><span class="chip">Sample figures</span></div>
+      <div class="num" style="font-size:30px;font-weight:600;margin:8px 0 2px">RM 48,320.15</div>
+      <div style="font-size:13px;color:var(--ink-3)">Assets RM 61,870.15 · Owed RM 13,550.00</div>
+      <table class="tx" style="margin-top:16px">
+        <tr><td><span class="ref">Maybank savings</span><span class="what">Bank</span></td><td class="n">32,410.00</td></tr>
+        <tr><td><span class="ref">ASB</span><span class="what">Savings</span></td><td class="n">27,000.00</td></tr>
+        <tr><td><span class="ref">Touch 'n Go eWallet</span><span class="what">E-wallet</span></td><td class="n">2,460.15</td></tr>
+        <tr><td><span class="ref">Car loan</span><span class="what">Loan</span></td><td class="n neg">(13,550.00)</td></tr>
+      </table>
+      <div style="margin-top:16px;font-size:13px;color:var(--ink-3)">Spent this month</div>
+      <div style="display:flex;height:10px;border-radius:999px;overflow:hidden;margin-top:6px" aria-hidden="true">
+        <i style="width:38%;background:var(--blue)"></i><i style="width:24%;background:var(--good)"></i><i style="width:20%;background:var(--warn)"></i><i style="width:18%;background:var(--ink-3)"></i>
+      </div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--blue)"></i>Food</span><span><i style="background:var(--good)"></i>Bills</span><span><i style="background:var(--warn)"></i>Transport</span><span><i style="background:var(--ink-3)"></i>Other</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 9 · PRICING ═════════ -->
+<section class="alt" id="pricing" aria-labelledby="price-title">
+  <div class="wrap">
+    <div class="head center reveal">
+      <span class="eyebrow">Pricing</span>
+      <h2 id="price-title">Simple, transparent plans.</h2>
+      <p class="lede">Choose the plan that fits your business. Every plan keeps the same double-entry engine and the same controls.</p>
+    </div>
+    <div class="plans" id="plans"></div>
+    <p class="price-note" id="price-note"></p>
+  </div>
+</section>
+
+<!-- ═════════ 10 · SECURITY ═════════ -->
+<section class="dark" id="security" aria-labelledby="sec-title">
+  <div class="wrap sec-grid">
+    <div class="reveal">
+      <span class="eyebrow">Security &amp; controls</span>
+      <h2 id="sec-title">Your data, kept to the rules your auditor checks.</h2>
+      <p class="lede">Books you can trust are books that can't be quietly changed. These controls are enforced by the database and the engine — not left to good habits.</p>
+      <div class="sec-cards">
+        <div><b>Company isolation</b><span>Row-level security keeps each company's books visible only to its members.</span></div>
+        <div><b>Ten roles</b><span>Every action is checked against the user's role in that company.</span></div>
+        <div><b>Reverse, never delete</b><span>Posted entries are immutable; corrections are linked reversals.</span></div>
+        <div><b>Period locking</b><span>Closed months can't be posted to; reopening is authorised and logged.</span></div>
+        <div><b>Audit trail</b><span>Who posted, reversed, closed or signed in — and when.</span></div>
+        <div><b>Private documents</b><span>Attachments sit in private storage, readable only by the company's users.</span></div>
+      </div>
+    </div>
+    <div class="shield reveal" aria-hidden="true">
+      <svg viewBox="0 0 240 260" fill="none">
+        <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B6BF0"/><stop offset="1" stop-color="#1A3A9C"/></linearGradient></defs>
+        <path d="M120 12l92 34v72c0 60-38 107-92 128C66 225 28 178 28 118V46z" fill="url(#sg)" stroke="#8EADFF" stroke-opacity=".5" stroke-width="2"/>
+        <path d="M120 36l70 26v56c0 46-28 82-70 99-42-17-70-53-70-99V62z" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="2"/>
+        <rect x="88" y="112" width="64" height="52" rx="8" fill="#fff"/>
+        <path d="M100 112V98a20 20 0 0140 0v14" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+        <circle cx="120" cy="134" r="7" fill="#1A3A9C"/><path d="M120 138v12" stroke="#1A3A9C" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 13 · DOCUMENTS ═════════ -->
+<section id="documents" aria-labelledby="doc-title">
+  <div class="wrap split flip">
+    <div class="reveal">
+      <span class="eyebrow">Document management</span>
+      <h2 id="doc-title">Keep every document beside its entry.</h2>
+      <p class="lede">Upload photos, scans and PDFs of receipts, bills, payment slips and transfer screenshots. Zycount reads them into a draft, and keeps the file with the entry once it posts.</p>
+      <ul class="checks">
+        <li><span><b>JPG, PNG, WebP or PDF</b>, up to 10 MB each</span></li>
+        <li><span><b>Duplicate warning</b> — Zycount tells you when the same file was uploaded before</span></li>
+        <li><span><b>Never altered</b> — once a file backs a posted document, detaching it is restricted and logged</span></li>
+      </ul>
+    </div>
+    <div class="panel files reveal" aria-label="Example document inbox with sample files">
+      <div class="files-h"><b>Document inbox</b><span class="chip">Sample files</span></div>
+      <div class="file"><span class="ft" style="background:#2156E8">JPG</span><div><b>receipt-kedai-elektrik.jpg</b><span class="m">Read · RM 186.50 · 29 Aug</span></div><span class="chip blue">Scanned</span></div>
+      <div class="file"><span class="ft" style="background:#B42335">PDF</span><div><b>tnb-bill-august.pdf</b><span class="m">Linked to BL-2026-000142</span></div><span class="chip good">Recorded</span></div>
+      <div class="file"><span class="ft" style="background:#17784F">PNG</span><div><b>duitnow-transfer-30aug.png</b><span class="m">Linked to PV-2026-000097</span></div><span class="chip good">Recorded</span></div>
+      <div class="file"><span class="ft" style="background:#94590A">PDF</span><div><b>supplier-b-invoice-7731.pdf</b><span class="m">Uploaded today</span></div><span class="chip">New</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 14 · ONBOARDING ═════════ -->
+<section class="alt" id="get-started" aria-labelledby="steps-title">
+  <div class="wrap">
+    <div class="head center reveal">
+      <span class="eyebrow">How it works</span>
+      <h2 id="steps-title">Get started in three steps.</h2>
+    </div>
+    <ol class="steps" style="list-style:none;margin:0;padding:0">
+      <li class="step-c reveal"><span class="n">01</span><h3>Create your account</h3><p>Sign up with your email. Your books open straight away — no card needed.</p></li>
+      <li class="step-c reveal"><span class="n">02</span><h3>Set up your books</h3><p>Choose business or personal books. A Malaysian chart of accounts and this year's periods are ready to post.</p></li>
+      <li class="step-c reveal"><span class="n">03</span><h3>Start recording</h3><p>Issue invoices, record bills, import a bank statement and watch the reports fill in.</p></li>
+    </ol>
+    <div class="steps-cta"><a class="btn btn-primary" href="login.html#register">Create your account</a></div>
+  </div>
+</section>
+
+<!-- ═════════ 11 · TESTIMONIALS ═════════ -->
+<section id="testimonials" aria-labelledby="quote-title">
+  <div class="wrap">
+    <div class="head center reveal">
+      <span class="eyebrow">Customer stories</span>
+      <h2 id="quote-title">What our customers say.</h2>
+      <p class="lede" id="quote-note"></p>
+    </div>
+    <div class="quotes" id="quotes"></div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="alt" id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <div class="head center reveal"><span class="eyebrow">Questions</span><h2 id="faq-title">Asked by accountants, answered plainly.</h2></div>
+    <div class="faq">
+      <details open><summary>Is Zycount real double-entry accounting?</summary><p>Yes. Every transaction is a journal with at least two lines that must balance before it posts. Invoices, bills, receipts and payments generate their journals automatically, and you can see each one before and after it posts.</p></details>
+      <details><summary>Can I fix a mistake in a posted entry?</summary><p>You reverse it. Zycount posts an equal-and-opposite entry linked to the original, then you post the correct one. The ledger keeps the full story, which is exactly what an auditor wants to see.</p></details>
+      <details><summary>Does it handle SST and LHDN e-Invoice?</summary><p>Tax codes carry the rate and post output and input tax to separate accounts. Invoices can be submitted to LHDN MyInvois and show their validation status and QR code. Always confirm current rates and rules with the authorities before you file.</p></details>
+      <details><summary>Can I move my existing books in?</summary><p>You can set your own account codes and document numbers, enter opening balances, and import bank statements to reconcile against.</p></details>
+      <details><summary>Can I try it right now?</summary><p>Yes — create an account and your books open straight away, with a ready chart of accounts and this year's periods.</p></details>
+      <details><summary>Who owns the data?</summary><p>You do. Export reports and lists to CSV, print or download documents as PDF, and invite your accountant or auditor with a read-only role.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 12 · CALL TO ACTION ═════════ -->
+<section aria-labelledby="cta-title" style="padding-bottom:0">
+  <div class="wrap">
+    <div class="final reveal">
+      <div>
+        <h2 id="cta-title">Ready to take control of your finances?</h2>
+        <p>Open your books with a Malaysian chart of accounts, SST codes and twelve fiscal periods ready to post.</p>
+      </div>
+      <div class="ctas">
+        <a class="btn btn-primary" href="login.html#register">Get Started</a>
+        <a class="btn btn-line" href="login.html">Log in</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ═════════ 15 · FOOTER ═════════ -->
+<footer class="site">
+  <div class="wrap">
+    <div>
+      <a class="logo" href="#main"><img src="assets/zycount-mark.svg" alt="" width="30" height="30">Zycount</a>
+      <p style="margin-top:14px;max-width:320px">Simple accounting for a stronger tomorrow. Double-entry books for Malaysian businesses — every figure traceable to its source.</p>
+    </div>
+    <div><h4>Product</h4><a href="#features">Features</a><a href="#invoicing">Invoicing</a><a href="#reports">Reports</a><a href="#pricing">Pricing</a><a href="#security">Security</a></div>
+    <div><h4>Company</h4><a href="#industries">Who it's for</a><a href="#personal">Personal books</a><a href="#testimonials">Customer stories</a><a href="https://github.com/HAFIZRAMALAN/zycount" rel="noopener">Source code</a><a href="https://github.com/HAFIZRAMALAN/zycount/tree/main/docs/spec" rel="noopener">Engineering spec</a></div>
+    <div><h4>Support</h4><a href="#faq">FAQ</a><a href="#get-started">Getting started</a><a href="login.html">Log in</a><a href="login.html#register">Create account</a></div>
+    <div class="legal"><span>© 2026 Zycount · Made in Malaysia</span><span>Figures shown on this page come from a demo company.</span></div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  document.documentElement.classList.add("js");
+  if (window.ZYTheme) ZYTheme.mount(document.getElementById("theme-btn"));
+
+  /* ── Pricing: edit plans here. price: null shows "to be announced". ── */
+  var PRICING = {
+    currency: "RM",
+    period: "/month",
+    note: "Prices are per company. Pay yearly and get two months free. Extra companies RM 29/month each.",
+    plans: [
+      { name: "Starter", price: 49, yearly: 490, desc: "For sole proprietors and new businesses.",
+        features: ["1 user", "Invoices, bills & receipts", "Bank reconciliation", "Financial reports", "LHDN MyInvois e-Invoice"],
+        cta: "Get Started", href: "login.html#register" },
+      { name: "Business", price: 99, yearly: 990, popular: true, desc: "For growing teams that share the books.",
+        features: ["Everything in Starter", "Up to 5 users with roles", "Receipt capture & documents", "AR/AP contra & cash book"],
+        cta: "Get Started", href: "login.html#register" },
+      { name: "Pro", price: 199, yearly: 1990, desc: "For established businesses and their accountants.",
+        features: ["Everything in Business", "Unlimited users", "Auditor & read-only access", "Priority support"],
+        cta: "Get Started", href: "login.html#register" }
+    ]
+  };
+
+  /* ── Testimonials: replace with real reviews; placeholder: true marks them on the page. ── */
+  var TESTIMONIALS = [
+    { quote: "Your customer's words about Zycount will appear here once they've agreed to share them.", name: "Customer name", role: "Business owner", placeholder: true },
+    { quote: "A second review — what changed in their month-end, in their own words.", name: "Customer name", role: "Small business owner", placeholder: true },
+    { quote: "A third review, ideally from an accountant or finance manager who uses Zycount.", name: "Customer name", role: "Finance manager", placeholder: true }
+  ];
+
+  /* ── Industries photo: set to a licensed image path, e.g. "assets/industries.jpg". ── */
+  var INDUSTRY_PHOTO = { src: "", alt: "" };
+
+  var fmt = function (n) { return (n < 0 ? "(" : "") + Math.abs(n).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (n < 0 ? ")" : ""); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+
+  /* ── mobile menu ── */
+  var menuBtn = document.querySelector(".menu-btn"), mnav = document.getElementById("mobile-nav");
+  function setMenu(open) { mnav.classList.toggle("open", open); menuBtn.setAttribute("aria-expanded", String(open)); menuBtn.setAttribute("aria-label", open ? "Close menu" : "Open menu"); }
+  menuBtn.addEventListener("click", function () { setMenu(!mnav.classList.contains("open")); });
+  mnav.addEventListener("click", function (e) { if (e.target.tagName === "A") setMenu(false); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && mnav.classList.contains("open")) { setMenu(false); menuBtn.focus(); } });
+
+  /* ── tabs with arrow-key support ── */
+  function tablist(container, onSelect) {
+    var tabs = Array.prototype.slice.call(container.querySelectorAll('[role="tab"]'));
+    function select(i, focus) {
+      tabs.forEach(function (t, j) { t.setAttribute("aria-selected", String(i === j)); t.tabIndex = i === j ? 0 : -1; });
+      if (focus) tabs[i].focus();
+      onSelect(i, tabs[i]);
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener("click", function () { select(i); });
+      t.addEventListener("keydown", function (e) {
+        var k = e.key, n = tabs.length;
+        if (k === "ArrowRight" || k === "ArrowDown") { e.preventDefault(); select((i + 1) % n, true); }
+        else if (k === "ArrowLeft" || k === "ArrowUp") { e.preventDefault(); select((i - 1 + n) % n, true); }
+        else if (k === "Home") { e.preventDefault(); select(0, true); }
+        else if (k === "End") { e.preventDefault(); select(n - 1, true); }
+      });
+    });
+    select(0);
+  }
+
+  /* ── the trail ── */
+  var TRAIL = [
+    { step: "01", title: "Source document", ref: "INV-2026-000206",
+      h: "It starts with a document you already make.",
+      p: "A sales invoice to customer A: goods RM 22,096.62, services RM 3,013.18, SST RM 1,325.80. Nothing is keyed into the ledger by hand.",
+      rows: [["Goods", "22,096.62"], ["Services", "3,013.18"], ["SST", "1,325.80"], ["Invoice total", "26,435.60"]] },
+    { step: "02", title: "Posting rule", ref: "Dr AR · Cr Sales · Cr SST",
+      h: "The engine decides the double entry.",
+      p: "Posting rules map each document type to accounts. You see the entry it will produce — account by account — before you confirm.",
+      rows: [["Dr 1150 Accounts Receivable", "26,435.60"], ["Cr 4110 Sales — Goods", "22,096.62"], ["Cr 4120 Sales — Services", "3,013.18"], ["Cr 2150 SST Output Tax", "1,325.80"]] },
+    { step: "03", title: "Journal", ref: "JV-2026-000206",
+      h: "A balanced journal, or nothing at all.",
+      p: "Debits and credits must match to the sen. Unbalanced entries are rejected with a clear reason — and the invoice is told it was not posted.",
+      rows: [["Total debit", "26,435.60"], ["Total credit", "26,435.60"], ["Difference", "0.00"], ["Status", "POSTED"]] },
+    { step: "04", title: "General ledger", ref: "1150 Accounts Receivable",
+      h: "It lands on every account it touched.",
+      p: "Each line updates its account's running balance and keeps a link to the journal and the invoice. Receivables now owe RM 148,700.41.",
+      rows: [["Opening", "…"], ["27 Aug · JV-2026-000206", "+26,435.60"], ["31 Aug · receipt", "−26,435.60"], ["Closing balance", "148,700.41"]] },
+    { step: "05", title: "Trial balance", ref: "31 Aug 2026 · balanced",
+      h: "The books still balance, overall.",
+      p: "The trial balance sums every account. If debits and credits ever disagreed, you'd know — but the engine never lets them.",
+      rows: [["Total debits", "1,945,237.53"], ["Total credits", "1,945,237.53"], ["Out of balance", "0.00"]] },
+    { step: "06", title: "Statements", ref: "P&L · Balance sheet",
+      h: "And it reads straight into the statements.",
+      p: "Revenue in the profit & loss, receivables in the balance sheet. Click the figure and walk all the way back to step 01.",
+      rows: [["Revenue YTD", "1,362,497.64"], ["Net profit YTD", "149,029.13"], ["Total assets", "717,369.02"], ["Liabilities + equity", "717,369.02"]] }
+  ];
+  var trailTabs = document.getElementById("trail-tabs"), trailDetail = document.getElementById("trail-detail");
+  TRAIL.forEach(function (t, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.id = "trail-" + i;
+    b.setAttribute("aria-controls", "trail-detail");
+    b.innerHTML = '<span class="step">' + t.step + '</span><b>' + esc(t.title) + '</b><span class="ref">' + esc(t.ref) + '</span>';
+    trailTabs.appendChild(b);
+  });
+  tablist(trailTabs, function (i) {
+    var t = TRAIL[i];
+    trailDetail.setAttribute("aria-labelledby", "trail-" + i);
+    trailDetail.innerHTML =
+      '<div><span class="eyebrow">Step ' + t.step + '</span><h3>' + esc(t.h) + '</h3><p>' + esc(t.p) + '</p></div>' +
+      '<div class="pane"><table>' + t.rows.map(function (r) {
+        return '<tr><td>' + esc(r[0]) + '</td><td class="n">' + esc(r[1]) + '</td></tr>';
+      }).join("") + '</table></div>';
+  });
+
+  /* ── statements (demo books, Jan–Aug 2026) ── */
+  var REPORTS = {
+    pl: { meta: ["Profit & loss", "1 Jan – 31 Aug 2026 · RM"], rows: [
+      ["grp", "Revenue"], ["", "Sales — Goods", 1198997.96, 1], ["", "Sales — Services", 163499.68, 1], ["sub", "Total revenue", 1362497.64],
+      ["grp", "Cost of sales"], ["", "Cost of goods sold", -791338.63, 1], ["sub", "Gross profit", 571159.01],
+      ["grp", "Operating expenses"], ["", "Salaries and wages", -272000, 1], ["", "EPF, SOCSO & EIS — employer", -38352, 1],
+      ["", "Rental of premises", -68000, 1], ["", "Utilities", -23624.22, 1], ["", "Depreciation", -14400, 1], ["", "Bank charges", -793.66, 1],
+      ["sub", "Operating profit", 153989.13], ["", "Interest on term loans", -4960, 1],
+      ["grand", "Net profit", 149029.13]
+    ], proof: ["Ties to the ledger", "Revenue − expenses = 149,029.13"] },
+    bs: { meta: ["Balance sheet", "As at 31 Aug 2026 · RM"], rows: [
+      ["grp", "Assets"], ["", "Cash and bank", 266641.12, 1], ["", "Accounts receivable", 148700.41, 1], ["", "Inventory", 182516.21, 1],
+      ["", "SST input tax", 49911.28, 1], ["", "Equipment, net of depreciation", 69600, 1], ["sub", "Total assets", 717369.02],
+      ["grp", "Liabilities"], ["", "Accounts payable", 78300, 1], ["", "Accruals", 9200, 1], ["", "SST output tax", 71939.89, 1],
+      ["", "Term loans", 104000, 1], ["sub", "Total liabilities", 263439.89],
+      ["grp", "Equity"], ["", "Share capital", 250000, 1], ["", "Retained earnings", 54900, 1], ["", "Profit for the period", 149029.13, 1],
+      ["sub", "Total equity", 453929.13], ["grand", "Liabilities + equity", 717369.02]
+    ], proof: ["Assets = Liabilities + Equity", "717,369.02 = 717,369.02"] },
+    tb: { meta: ["Trial balance", "As at 31 Aug 2026 · RM"], cols: true, rows: [
+      ["", "Assets (cash, bank, AR, stock, SST, equipment)", [731769.02, 0], 1], ["", "Accumulated depreciation", [0, 14400], 1],
+      ["", "Liabilities (AP, accruals, SST, loans)", [0, 263439.89], 1], ["", "Share capital & retained earnings", [0, 304900], 1],
+      ["", "Revenue", [0, 1362497.64], 1], ["", "Cost of sales", [791338.63, 0], 1], ["", "Expenses", [422129.88, 0], 1],
+      ["grand", "Totals", [1945237.53, 1945237.53]]
+    ], proof: ["Debits = credits", "1,945,237.53 = 1,945,237.53"] }
+  };
+  var repBody = document.getElementById("rep-body");
+  tablist(document.getElementById("rep-tabs"), function (i, tab) {
+    var r = REPORTS[tab.dataset.rep];
+    repBody.setAttribute("aria-labelledby", tab.id);
+    var head = '<div class="rep-meta"><span><b style="color:var(--ink)">' + esc(r.meta[0]) + '</b> · Demo company</span><span>' + esc(r.meta[1]) + '</span></div>';
+    var body = '<table class="st">' + (r.cols ? '<tr class="grp"><td></td><td class="n">Debit</td><td class="n">Credit</td></tr>' : '') +
+      r.rows.map(function (row) {
+        var cls = row[0], label = row[1], val = row[2], ind = row[3];
+        if (cls === "grp") return '<tr class="grp"><td colspan="3">' + esc(label) + '</td></tr>';
+        var cells = r.cols
+          ? '<td class="n">' + (val[0] ? fmt(val[0]) : "") + '</td><td class="n">' + (val[1] ? fmt(val[1]) : "") + '</td>'
+          : '<td class="n">' + fmt(val) + '</td>';
+        return '<tr class="' + cls + '"><td class="' + (ind ? "ind" : "") + '">' + esc(label) + '</td>' + cells + '</tr>';
+      }).join("") + '</table>';
+    repBody.innerHTML = head + body + '<div class="proof"><span>✓ ' + esc(r.proof[0]) + '</span><span class="mono">' + esc(r.proof[1]) + '</span></div>';
+  });
+
+  /* ── dashboard chart ── */
+  var T = [["Jan",145402.15,136426.8],["Feb",139004.93,133574.32],["Mar",173282.53,153504.38],["Apr",151340.78,140482.28],
+           ["May",161439.4,146623.48],["Jun",210841.62,175518.5],["Jul",204295.12,171592.9],["Aug",176891.11,155745.85]];
+  var svg = document.getElementById("chart"), W = 440, H = 220, L = 38, B = 24, top = 10, max = 225000;
+  var y = function (v) { return top + (H - B - top) * (1 - v / max); };
+  var slot = (W - L - 6) / T.length, bw = 11, out = "", pts = [];
+  [0, 75000, 150000, 225000].forEach(function (v) {
+    out += '<line x1="' + L + '" x2="' + W + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--rule)" />' +
+      '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="10" fill="var(--ink-3)" font-family="IBM Plex Mono">' + (v / 1000) + 'k</text>';
+  });
+  T.forEach(function (m, i) {
+    var cx = L + slot * i + slot / 2;
+    out += '<rect x="' + (cx - bw - 1) + '" y="' + y(m[1]) + '" width="' + bw + '" height="' + (y(0) - y(m[1])) + '" rx="2" fill="var(--blue)"><title>' + m[0] + ' revenue RM ' + fmt(m[1]) + '</title></rect>';
+    out += '<rect x="' + (cx + 1) + '" y="' + y(m[2]) + '" width="' + bw + '" height="' + (y(0) - y(m[2])) + '" rx="2" fill="var(--ink-3)" opacity=".55"><title>' + m[0] + ' expenses RM ' + fmt(m[2]) + '</title></rect>';
+    out += '<text x="' + cx + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10.5" fill="var(--ink-3)" font-family="IBM Plex Sans">' + m[0] + '</text>';
+    pts.push([cx, y(m[1] - m[2]), m]);
+  });
+  out += '<polyline points="' + pts.map(function (p) { return p[0] + "," + p[1]; }).join(" ") + '" fill="none" stroke="var(--good)" stroke-width="2" />';
+  pts.forEach(function (p) { out += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="2.8" fill="var(--good)"><title>' + p[2][0] + ' profit RM ' + fmt(p[2][1] - p[2][2]) + '</title></circle>'; });
+  svg.innerHTML = out;
+
+  /* ── pricing ── */
+  document.getElementById("plans").innerHTML = PRICING.plans.map(function (p) {
+    var price = p.price == null
+      ? '<b class="tba">Price to be announced</b>'
+      : '<b>' + esc(PRICING.currency) + ' ' + esc(p.price) + '</b><span>' + esc(PRICING.period) + '</span>';
+    var yearly = p.yearly ? '<p class="yearly">or ' + esc(PRICING.currency) + ' ' + esc(p.yearly.toLocaleString("en-MY")) + ' a year</p>' : '';
+    return '<article class="plan reveal' + (p.popular ? ' pop' : '') + '">' + (p.popular ? '<span class="badge">Most popular</span>' : '') +
+      '<div><h3>' + esc(p.name) + '</h3><p class="desc" style="margin-top:6px">' + esc(p.desc) + '</p></div>' +
+      '<div><div class="price">' + price + '</div>' + yearly + '</div>' +
+      '<ul>' + p.features.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join("") + '</ul>' +
+      '<a class="btn ' + (p.popular ? 'btn-primary' : 'btn-ghost') + '" href="' + esc(p.href) + '">' + esc(p.cta) + '</a></article>';
+  }).join("");
+  document.getElementById("price-note").textContent = PRICING.note;
+
+  /* ── testimonials ── */
+  var anyPlaceholder = TESTIMONIALS.some(function (t) { return t.placeholder; });
+  document.getElementById("quote-note").textContent = anyPlaceholder
+    ? "Placeholder cards — real customer reviews will replace these once customers agree to share them."
+    : "Real businesses, in their own words.";
+  document.getElementById("quotes").innerHTML = TESTIMONIALS.map(function (t) {
+    return '<figure class="quote reveal" style="margin:0">' + (t.placeholder ? '<span class="chip warn" style="align-self:flex-start">Placeholder</span>' : '') +
+      '<blockquote>“' + esc(t.quote) + '”</blockquote>' +
+      '<figcaption class="who"><span class="av" aria-hidden="true">' + esc(t.name.charAt(0)) + '</span><span><b>' + esc(t.name) + '</b><span>' + esc(t.role) + '</span></span></figcaption></figure>';
+  }).join("");
+
+  /* ── optional industries photo, hidden if missing or broken ── */
+  if (INDUSTRY_PHOTO.src) {
+    var holder = document.getElementById("ind-photo"), img = new Image();
+    img.alt = INDUSTRY_PHOTO.alt; img.loading = "lazy"; img.decoding = "async";
+    img.onload = function () { holder.hidden = false; };
+    img.onerror = function () { holder.remove(); };
+    img.src = INDUSTRY_PHOTO.src;
+    holder.appendChild(img);
+  }
+
+  /* ── reveal on scroll ── */
+  var items = document.querySelectorAll(".reveal");
+  if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    items.forEach(function (el) { el.classList.add("in"); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -8% 0px" });
+    items.forEach(function (el) { io.observe(el); });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Sign in to Zycount — double-entry accounting for Malaysian businesses and personal finances.">
+<title>Sign in · Zycount</title>
+<script src="js/zy-theme.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --paper:#F6F7F9; --card:#FFFFFF; --sunk:#F2F4F7; --rail:#111621; --rail-2:#19202E; --rail-line:#28313F;
+  --ink:#101828; --ink-2:#475467; --ink-3:#667085; --line:#E4E7EC;
+  --brand:#3A3FD0; --brand-2:#2F33B0; --brand-soft:#EEF0FF;
+  --good:#067647; --good-soft:#E9F8EF; --bad:#B42318; --bad-soft:#FEF0EE;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme]){
+    color-scheme:dark;
+    --paper:#0B0F17; --card:#121824; --sunk:#182030; --rail:#0C111B; --rail-2:#141B29; --rail-line:#222C3D;
+    --ink:#EEF2F8; --ink-2:#B4BFCE; --ink-3:#8793A6; --line:#253044;
+    --brand:#8C91F4; --brand-2:#A5A9F7; --brand-soft:#1D2146;
+    --good:#4ACB8E; --good-soft:#0F2A1F; --bad:#F27D8E; --bad-soft:#2F151A;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0B0F17; --card:#121824; --sunk:#182030; --rail:#0C111B; --rail-2:#141B29; --rail-line:#222C3D;
+  --ink:#EEF2F8; --ink-2:#B4BFCE; --ink-3:#8793A6; --line:#253044;
+  --brand:#8C91F4; --brand-2:#A5A9F7; --brand-soft:#1D2146;
+  --good:#4ACB8E; --good-soft:#0F2A1F; --bad:#F27D8E; --bad-soft:#2F151A;
+}
+:root[data-theme="dim"]{
+  color-scheme:dark;
+  --paper:#1C2230; --card:#262D3D; --sunk:#2C3445; --rail:#181E2B; --rail-2:#222A3A; --rail-line:#343D51;
+  --ink:#E4E8F0; --ink-2:#B9C1CF; --ink-3:#939DB0; --line:#3A4357;
+  --brand:#6D72E6; --brand-2:#7D82EC; --brand-soft:#33375A;
+  --good:#5CC497; --good-soft:#233D33; --bad:#F08496; --bad-soft:#40242B;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:14px/1.5 "IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{min-height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+
+/* ── brand side ─────────────────────────────── */
+.side{background:var(--rail);color:#DDE3EE;padding:40px 52px;display:flex;flex-direction:column;gap:28px;position:relative;overflow:hidden}
+.side::before{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(0deg,transparent 0 31px,rgba(255,255,255,.03) 31px 32px);pointer-events:none}
+.side>*{position:relative}
+.logo{display:inline-flex;align-items:center;gap:10px;color:#fff;font-weight:600;font-size:17px}
+.logo .mark{width:32px;height:32px;border-radius:9px;background:var(--brand);display:grid;place-items:center;color:#fff;font-weight:700}
+.side h2{font-size:30px;line-height:1.2;margin:auto 0 0;font-weight:600;letter-spacing:-.015em;max-width:460px;color:#fff}
+.side p.lead{margin:0;color:#AFBACB;max-width:440px;font-size:15px}
+.jv{background:var(--rail-2);border:1px solid var(--rail-line);border-radius:12px;max-width:470px;overflow:hidden}
+.jv-h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--rail-line);font-size:12.5px;color:#AFBACB}
+.jv-h b{color:#fff;font-weight:600}
+.jv table{width:100%;border-collapse:collapse;font-size:13px}
+.jv td{padding:9px 16px;border-bottom:1px solid var(--rail-line)}
+.jv td.n{text-align:right;width:110px}
+.jv tr.t td{border-bottom:0;color:#fff;font-weight:600}
+.jv .code{color:#6F7C90;margin-left:6px;font-size:12px}
+.ok{display:inline-flex;align-items:center;gap:6px;color:#4ACB8E;font-weight:600}
+.ok i{width:8px;height:8px;border-radius:50%;background:#4ACB8E;display:inline-block;box-shadow:0 0 0 3px rgba(74,203,142,.18)}
+.side .foot{margin-top:auto;color:#6F7C90;font-size:12px;display:flex;gap:18px;flex-wrap:wrap}
+
+/* ── form side ─────────────────────────────── */
+.main{display:flex;align-items:center;justify-content:center;padding:40px 24px}
+.panel{width:100%;max-width:420px}
+.top-link{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;font-size:13px;color:var(--ink-3)}
+.mobile-logo{display:none}
+.top-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.theme-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);display:grid;place-items:center;cursor:pointer}
+.theme-btn:hover{color:var(--ink)}
+h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-.015em}
+.sub{color:var(--ink-2);margin:0 0 24px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--sunk);border-radius:10px;padding:4px;margin-bottom:22px}
+.tabs button{border:0;background:transparent;padding:8px;border-radius:8px;font:inherit;font-weight:500;color:var(--ink-2);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(16,24,40,.08)}
+.field{margin-bottom:14px}
+.field label,.field .lbl{display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:6px}
+.input{position:relative}
+.input input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font:inherit;font-size:15px;outline:none;transition:border-color .15s, box-shadow .15s}
+.input input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.input input[aria-invalid="true"]{border-color:var(--bad)}
+.input .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--ink-3);cursor:pointer;padding:6px;border-radius:6px}
+.input .eye:hover{color:var(--ink)}
+.row{display:flex;justify-content:space-between;align-items:center;margin:4px 0 18px;font-size:13.5px;color:var(--ink-2)}
+.row label{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+.row input{accent-color:var(--brand);width:16px;height:16px}
+.btn{width:100%;border:0;border-radius:9px;padding:12px 14px;font:inherit;font-size:15px;font-weight:600;cursor:pointer;background:var(--brand);color:#fff;display:inline-flex;justify-content:center;align-items:center;gap:8px}
+.btn:hover{background:var(--brand-2)}
+.btn[disabled]{opacity:.6;cursor:progress}
+.btn.secondary{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.secondary:hover{background:var(--sunk)}
+.alert{border-radius:9px;padding:11px 13px;font-size:13.5px;margin-bottom:16px;display:none;line-height:1.45}
+.alert.show{display:block}
+.alert.err{background:var(--bad-soft);color:var(--bad)}
+.alert.ok{background:var(--good-soft);color:var(--good)}
+.alert a{color:inherit;text-decoration:underline;font-weight:600}
+.hint{font-size:12.5px;color:var(--ink-3);margin-top:6px}
+.kinds{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.kind{position:relative;display:block;border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;background:var(--card)}
+.kind input{position:absolute;opacity:0;pointer-events:none}
+.kind b{display:block;font-size:14.5px}
+.kind span{display:block;color:var(--ink-3);font-size:12.5px;line-height:1.4;margin-top:2px}
+.kind{transition:border-color .15s,background .15s}
+.kind:hover{border-color:var(--ink-3)}
+.kind .k-ico{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--sunk);color:var(--ink-2);margin-bottom:8px}
+.kind:has(input:checked){border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 1px var(--brand)}
+.kind:has(input:checked) .k-ico{background:var(--brand);color:#fff}
+.kind:has(input:checked)::after{content:"✓";position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+.kind-info{border:1px solid var(--line);border-radius:10px;background:var(--sunk);padding:12px 14px;margin:-6px 0 18px;font-size:13px;color:var(--ink-2)}
+.kind-info b{display:block;color:var(--ink);font-size:13.5px;margin-bottom:6px}
+.kind-info ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.kind-info li::before{content:"✓ ";color:var(--good);font-weight:700}
+.kind:has(input:focus-visible){outline:2px solid var(--brand);outline-offset:2px}
+.demo{margin-top:22px;text-align:center;font-size:13.5px;color:var(--ink-3)}
+.demo button{all:unset;color:var(--brand);font-weight:500;cursor:pointer}
+.demo button:hover{text-decoration:underline}
+.demo details{margin-top:10px;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.demo summary{padding:10px 14px;cursor:pointer;color:var(--ink-2);font-size:13px}
+.demo-list button{all:unset;box-sizing:border-box;display:flex;justify-content:space-between;gap:10px;width:100%;padding:9px 14px;cursor:pointer;border-top:1px solid var(--line);font-size:13px;color:var(--ink)}
+.demo-list button:hover,.demo-list button:focus-visible{background:var(--sunk)}
+.demo-list span{color:var(--ink-3)}
+.note{margin-top:20px;font-size:12.5px;color:var(--ink-3);text-align:center;line-height:1.5}
+.divider{display:flex;align-items:center;gap:12px;color:var(--ink-3);font-size:12px;margin:22px 0 0}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+[hidden]{display:none!important}
+
+@media (max-width:900px){
+  .wrap{grid-template-columns:1fr}
+  .side{display:none}
+  .mobile-logo{display:inline-flex}
+  .main{padding:28px 16px 40px;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="side" aria-hidden="true">
+    <a class="logo" href="index.html"><span class="mark">Z</span>Zycount</a>
+    <h2>Say what happened. Zycount writes the double entry.</h2>
+    <p class="lead">“Paid RM 86.40 for groceries from savings” becomes a balanced, numbered journal — and your reports update the moment it posts.</p>
+
+    <div class="jv">
+      <div class="jv-h"><span><b>JV-2026-000014</b> · Money out</span><span class="mono">26 Sep 2026</span></div>
+      <table>
+        <tr><td>Groceries<span class="code mono">6210</span></td><td class="n mono">86.40</td><td class="n mono"></td></tr>
+        <tr><td>Savings account<span class="code mono">1120</span></td><td class="n mono"></td><td class="n mono">86.40</td></tr>
+        <tr class="t"><td><span class="ok"><i></i>Balanced</span></td><td class="n mono">86.40</td><td class="n mono">86.40</td></tr>
+      </table>
+    </div>
+
+    <div class="foot"><span>Business &amp; personal books</span><span>MYR · SST</span><span>Period locking · audit trail</span></div>
+  </aside>
+
+  <main class="main">
+    <div class="panel">
+      <div class="top-link">
+        <a class="logo mobile-logo" href="index.html" style="color:var(--ink)"><span class="mark">Z</span>Zycount</a>
+        <span class="top-right"><a href="index.html">← zycount home</a><button class="theme-btn" id="theme-btn" type="button" aria-label="Theme"></button></span>
+      </div>
+
+      <!-- Sign in / create account -->
+      <section id="auth">
+        <h1 id="title">Sign in</h1>
+        <p class="sub" id="subtitle">Welcome back to your books.</p>
+
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-signin" aria-selected="true" aria-controls="form-signin">Sign in</button>
+          <button role="tab" id="tab-register" aria-selected="false" aria-controls="form-register">Create account</button>
+        </div>
+
+        <div class="alert err" id="err" role="alert"></div>
+        <div class="alert ok" id="okmsg" role="status"></div>
+
+        <form id="form-signin" novalidate>
+          <div class="field">
+            <label for="email">Email</label>
+            <div class="input"><input id="email" name="email" type="email" autocomplete="username" placeholder="you@example.com" required></div>
+          </div>
+          <div class="field">
+            <label for="password"><span>Password</span><a href="#" id="forgot-link">Forgot password?</a></label>
+            <div class="input">
+              <input id="password" name="password" type="password" autocomplete="current-password" required>
+              <button type="button" class="eye" data-eye="password" aria-label="Show password">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="row">
+            <label><input type="checkbox" id="remember" checked> Keep me signed in</label>
+          </div>
+          <button class="btn" type="submit" id="signin-btn">Sign in</button>
+        </form>
+
+        <form id="form-register" novalidate hidden>
+          <div class="kinds" role="radiogroup" aria-label="What are these books for?">
+            <label class="kind"><input type="radio" name="kind" value="BUSINESS" checked><span class="k-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2M3 12h18"/></svg></span><b>Business</b><span>Company or sole proprietor · SST, P&amp;L, balance sheet</span></label>
+            <label class="kind"><input type="radio" name="kind" value="PERSONAL"><span class="k-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.2-6 8-6s7 2 8 6"/></svg></span><b>Personal</b><span>Your own money · spending, savings, net worth</span></label>
+          </div>
+          <div class="kind-info" id="kind-info" aria-live="polite"></div>
+          <div class="field" id="company-field">
+            <label for="r-company">Company name</label>
+            <div class="input"><input id="r-company" type="text" autocomplete="organization" placeholder="Syarikat Contoh Sdn Bhd" required></div>
+          </div>
+          <div class="field">
+            <label for="r-name">Your name</label>
+            <div class="input"><input id="r-name" type="text" autocomplete="name" placeholder="Ahmad Faiz" required></div>
+          </div>
+          <div class="field">
+            <label for="r-email">Email</label>
+            <div class="input"><input id="r-email" type="email" autocomplete="email" placeholder="you@example.com" required></div>
+          </div>
+          <div class="field">
+            <label for="r-password">Password</label>
+            <div class="input">
+              <input id="r-password" type="password" autocomplete="new-password" required>
+              <button type="button" class="eye" data-eye="r-password" aria-label="Show password">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div class="hint">At least 8 characters, with a letter and a number.</div>
+          </div>
+          <button class="btn" type="submit" id="register-btn">Create account</button>
+          <p class="hint" style="text-align:center;margin-top:12px" id="register-hint">Your books open straight away — with a ready chart of accounts and this year's periods.</p>
+        </form>
+
+        <div class="demo" id="demo">
+          <div class="divider">or</div>
+          <p style="margin:14px 0 0">Just looking? <button type="button" id="demo-open">Open the demo company</button></p>
+          <details>
+            <summary>Try the demo as a different role</summary>
+            <div class="demo-list" id="demo-list"></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Forgot password -->
+      <section id="forgot" hidden>
+        <h1>Reset your password</h1>
+        <p class="sub">Enter the email you sign in with. We'll send a link to choose a new password.</p>
+        <div class="alert" id="forgot-msg" role="status"></div>
+        <form id="form-forgot" novalidate>
+          <div class="field">
+            <label for="f-email">Email</label>
+            <div class="input"><input id="f-email" type="email" autocomplete="email" placeholder="you@example.com" required></div>
+          </div>
+          <button class="btn" type="submit" id="forgot-btn">Send reset link</button>
+        </form>
+        <p class="note"><a href="#" id="back-signin">← Back to sign in</a></p>
+      </section>
+
+      <!-- Choose a new password (from the email link) -->
+      <section id="recover" hidden>
+        <h1>Choose a new password</h1>
+        <p class="sub">You're signed in from the reset link. Set a new password to continue.</p>
+        <div class="alert" id="recover-msg" role="alert"></div>
+        <form id="form-recover" novalidate>
+          <div class="field">
+            <label for="n-password">New password</label>
+            <div class="input"><input id="n-password" type="password" autocomplete="new-password" required></div>
+            <div class="hint">At least 8 characters, with a letter and a number.</div>
+          </div>
+          <div class="field">
+            <label for="n-password2">Type it again</label>
+            <div class="input"><input id="n-password2" type="password" autocomplete="new-password" required></div>
+          </div>
+          <button class="btn" type="submit" id="recover-btn">Save password and open my books</button>
+        </form>
+      </section>
+
+      <p class="note" id="footnote">Your books are kept in Zycount's database in Singapore, protected so only the people you add can see them.</p>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>
+(function () {
+  "use strict";
+  var SUPABASE_URL = "https://qkrikvmkoelusyjjqdkd.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_BoPf8kDj05jPr9__E2hcHQ_p0RH1Hm8"; // publishable; data is protected by row-level security
+  var KEY = "zycount.session";
+  var DEMO_PASSWORD = "Zycount!Demo2026"; // demo company only — local, stores nothing
+  var DEMO = [
+    { name: "Aisyah Rahman", email: "admin@zycount.test", role: "SuperAdmin", desc: "Owner — everything" },
+    { name: "Nurul Hidayah", email: "manager@zycount.test", role: "FinanceManager", desc: "Posts, closes periods" },
+    { name: "Lim Wei Jian", email: "accountant@zycount.test", role: "Accountant", desc: "Journals and accounts" },
+    { name: "Ravi Chandran", email: "auditor@zycount.test", role: "Auditor", desc: "Read-only plus audit" },
+    { name: "Tan Mei Ling", email: "viewer@zycount.test", role: "ReadOnly", desc: "Reports only" }
+  ];
+  var DEMO_COMPANY = "Zycount Demo Trading Sdn Bhd";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var params = new URLSearchParams(location.search);
+  var next = params.get("next") || "";
+  var recovering = /type=recovery/.test(location.hash) || params.has("code");
+
+  // An invite link (login.html#invite=…) is kept until you are signed in; the workspace accepts it.
+  var inviteMatch = location.hash.match(/invite=([a-f0-9]{64})/);
+  if (inviteMatch) {
+    try { localStorage.setItem("zl.invite", inviteMatch[1]); } catch (e) { /* ignore */ }
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  var invited = false;
+  try { invited = !!localStorage.getItem("zl.invite"); } catch (e) { /* ignore */ }
+
+  function readSession() {
+    try { return JSON.parse(localStorage.getItem(KEY) || sessionStorage.getItem(KEY) || "null"); } catch (e) { return null; }
+  }
+  function clearSession() {
+    try { localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+  }
+  function goApp() { location.replace("app.html" + (next && next.charAt(0) === "#" ? next : "")); }
+
+  // Returning from the app after signing out or an expired session: stay here.
+  if (params.get("signedout") === "1" || params.get("expired") === "1") clearSession();
+  else if (!recovering && readSession()) { goApp(); return; }
+
+  function startSession(user, remember, mode) {
+    var s = JSON.stringify({ name: user.name, email: user.email, role: user.role || "", company: user.company || "", mode: mode, at: new Date().toISOString() });
+    clearSession();
+    (remember ? localStorage : sessionStorage).setItem(KEY, s);
+  }
+
+  var clients = {};
+  function client(remember) {
+    var k = remember ? "local" : "session";
+    if (!clients[k]) {
+      if (!window.supabase || !window.supabase.createClient) throw new Error("NETWORK");
+      clients[k] = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: recovering && remember, storage: remember ? window.localStorage : window.sessionStorage }
+      });
+    }
+    return clients[k];
+  }
+
+  var err = $("err"), okmsg = $("okmsg");
+  function showErr(msg, fieldIds, html) {
+    okmsg.classList.remove("show");
+    if (html) err.innerHTML = msg; else err.textContent = msg;
+    err.classList.add("show");
+    document.querySelectorAll("[aria-invalid]").forEach(function (el) { el.removeAttribute("aria-invalid"); });
+    (fieldIds || []).forEach(function (id) { $(id).setAttribute("aria-invalid", "true"); });
+    if (fieldIds && fieldIds[0]) $(fieldIds[0]).focus();
+  }
+  function showOk(msg) { err.classList.remove("show"); okmsg.textContent = msg; okmsg.classList.add("show"); }
+  function clearMsgs() {
+    err.classList.remove("show"); okmsg.classList.remove("show");
+    document.querySelectorAll("[aria-invalid]").forEach(function (el) { el.removeAttribute("aria-invalid"); });
+  }
+  function friendly(e) {
+    var m = String((e && (e.message || e.error_description)) || e || "");
+    if (/Invalid login credentials/i.test(m)) return "That email and password don't match an account.";
+    if (/Email not confirmed/i.test(m)) return "This email hasn't been confirmed yet. Use the link we sent, or reset your password.";
+    if (/rate limit|too many/i.test(m)) return "Too many attempts. Wait a minute and try again.";
+    if (/NETWORK|Failed to fetch|NetworkError|Load failed/i.test(m)) return "Can't reach Zycount. Check your connection and try again.";
+    var code = m.match(/^([A-Z_]+):\s*(.*)$/);
+    return code ? code[2] : (m || "Something went wrong. Please try again.");
+  }
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  function validPassword(pw) { return pw.length >= 8 && pw.length <= 72 && /[A-Za-z]/.test(pw) && /\d/.test(pw); }
+  function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = label; }
+
+  // ── tabs ─────────────────────────────────────
+  function showTab(which) {
+    var reg = which === "register";
+    $("tab-signin").setAttribute("aria-selected", String(!reg));
+    $("tab-register").setAttribute("aria-selected", String(reg));
+    $("form-signin").hidden = reg;
+    $("form-register").hidden = !reg;
+    $("demo").hidden = reg;
+    $("title").textContent = "Sign in";
+    $("subtitle").textContent = "Welcome back to your books.";
+    if (reg) applyKind();
+    clearMsgs();
+    history.replaceState(null, "", location.pathname + location.search + (reg ? "#register" : ""));
+    (reg ? (kind() === "PERSONAL" ? $("r-name") : $("r-company")) : $("email")).focus();
+  }
+  $("tab-signin").onclick = function () { showTab("signin"); };
+  $("tab-register").onclick = function () { showTab("register"); };
+
+  function kind() { var k = document.querySelector('input[name="kind"]:checked'); return k ? k.value : "BUSINESS"; }
+  var KIND_INFO = {
+    BUSINESS: { title: "Create business books", sub: "For a company or sole proprietor.", btn: "Create business books",
+      head: "Your business books come with", items: ["Malaysian chart of accounts", "SST tax accounts", "Invoices, bills & receipts", "P&L and balance sheet"] },
+    PERSONAL: { title: "Create personal books", sub: "Track your own money — what you spend, save and owe.", btn: "Create personal books",
+      head: "Your personal books come with", items: ["Cash, bank & savings", "Loans and credit cards", "Everyday spending categories", "Net worth and spending reports"] }
+  };
+  function applyKind() {
+    var personal = kind() === "PERSONAL", info = KIND_INFO[kind()];
+    $("company-field").hidden = personal;
+    if (!$("form-register").hidden) { $("title").textContent = info.title; $("subtitle").textContent = info.sub; }
+    if (!$("register-btn").disabled) $("register-btn").textContent = info.btn;
+    $("kind-info").innerHTML = "<b>" + info.head + "</b><ul>" + info.items.map(function (t) { return "<li>" + t.replace(/&/g, "&amp;") + "</li>"; }).join("") + "</ul>";
+    $("register-hint").textContent = personal
+      ? "Your personal books open straight away — with cash, bank, savings, loans and everyday spending categories."
+      : "Your company books open straight away — with the Malaysian chart of accounts, SST accounts and this year's periods.";
+  }
+  document.querySelectorAll('input[name="kind"]').forEach(function (r) { r.addEventListener("change", applyKind); });
+  applyKind();
+
+  // ── show / hide password ─────────────────────
+  document.querySelectorAll("[data-eye]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var input = $(b.getAttribute("data-eye"));
+      var show = input.type === "password";
+      input.type = show ? "text" : "password";
+      b.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    });
+  });
+
+  // ── demo company (local sample data, nothing is saved) ─────────────
+  function openDemo(u) {
+    startSession({ name: u.name, email: u.email, role: u.role, company: DEMO_COMPANY }, false, "demo");
+    location.replace("app.html");
+  }
+  $("demo-open").addEventListener("click", function () { openDemo(DEMO[0]); });
+  var list = $("demo-list");
+  DEMO.forEach(function (u) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = "<b></b><span></span>";
+    b.querySelector("b").textContent = u.name;
+    b.querySelector("span").textContent = u.desc;
+    b.addEventListener("click", function () { openDemo(u); });
+    list.appendChild(b);
+  });
+
+  // ── sign in ──────────────────────────────────
+  $("form-signin").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    clearMsgs();
+    var email = $("email").value.trim().toLowerCase();
+    var pw = $("password").value;
+    if (!EMAIL_RE.test(email)) return showErr("Enter a valid email address.", ["email"]);
+    if (!pw) return showErr("Enter your password.", ["password"]);
+    var demo = DEMO.find(function (u) { return u.email === email; });
+    if (demo) {
+      if (pw === DEMO_PASSWORD) return openDemo(demo);
+      return showErr("That email and password don't match an account.", ["password"]);
+    }
+    var btn = $("signin-btn"), remember = $("remember").checked;
+    busy(btn, true, "Signing in…");
+    try {
+      var res = await client(remember).auth.signInWithPassword({ email: email, password: pw });
+      if (res.error) throw res.error;
+      var meta = res.data.user.user_metadata || {};
+      startSession({ name: meta.full_name || email.split("@")[0], email: email }, remember, "live");
+      goApp();
+    } catch (ex) {
+      busy(btn, false, "Sign in");
+      var msg = friendly(ex);
+      var old = [];
+      try { old = JSON.parse(localStorage.getItem("zycount.users") || "[]"); } catch (x) { /* ignore */ }
+      if (/don't match/.test(msg) && old.some(function (u) { return u.email === email; })) {
+        msg = "That account was made in the old browser-only preview, which didn't save to a database. Create it again with the Create account tab — it takes a minute.";
+      }
+      showErr(msg, ["password"]);
+    }
+  });
+
+  // ── create account ───────────────────────────
+  $("form-register").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    clearMsgs();
+    var k = kind();
+    var company = $("r-company").value.trim();
+    var name = $("r-name").value.trim();
+    var email = $("r-email").value.trim().toLowerCase();
+    var pw = $("r-password").value;
+    if (k === "BUSINESS" && company.length < 2) return showErr("Enter your company name.", ["r-company"]);
+    if (name.length < 2) return showErr("Enter your name.", ["r-name"]);
+    if (!EMAIL_RE.test(email)) return showErr("Enter a valid email address.", ["r-email"]);
+    if (!validPassword(pw)) return showErr("Use 8–72 characters, including a letter and a number.", ["r-password"]);
+    if (DEMO.some(function (u) { return u.email === email; })) return showErr("That address belongs to the demo. Use your own email.", ["r-email"]);
+
+    var btn = $("register-btn");
+    busy(btn, true, "Setting up your books…");
+    try {
+      var r = await fetch(SUPABASE_URL + "/functions/v1/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: k, company_name: k === "BUSINESS" ? company : "", full_name: name, email: email, password: pw })
+      });
+      var body = {};
+      try { body = await r.json(); } catch (x) { /* ignore */ }
+      if (r.status === 409) {
+        busy(btn, false, KIND_INFO[kind()].btn);
+        return showErr('An account with that email already exists. <a href="#" id="to-signin">Sign in instead</a>.', ["r-email"], true);
+      }
+      if (!r.ok) throw new Error(body.error || "INTERNAL: We couldn't create the account. Nothing was saved — please try again.");
+      var res = await client(true).auth.signInWithPassword({ email: email, password: pw });
+      if (res.error) throw res.error;
+      startSession({ name: name, email: email }, true, "live");
+      location.replace("app.html#dashboard");
+    } catch (ex) {
+      busy(btn, false, KIND_INFO[kind()].btn);
+      showErr(friendly(ex));
+    }
+  });
+  document.addEventListener("click", function (e) {
+    if (e.target && e.target.id === "to-signin") {
+      e.preventDefault();
+      var email = $("r-email").value;
+      showTab("signin");
+      $("email").value = email;
+      $("password").focus();
+    }
+  });
+
+  // ── forgot password ──────────────────────────
+  $("forgot-link").addEventListener("click", function (e) {
+    e.preventDefault();
+    $("auth").hidden = true; $("forgot").hidden = false;
+    $("f-email").value = $("email").value;
+    $("f-email").focus();
+  });
+  $("back-signin").addEventListener("click", function (e) {
+    e.preventDefault();
+    $("forgot").hidden = true; $("auth").hidden = false; $("forgot-msg").className = "alert";
+  });
+  $("form-forgot").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var email = $("f-email").value.trim().toLowerCase();
+    var box = $("forgot-msg");
+    if (!EMAIL_RE.test(email)) { box.className = "alert err show"; box.textContent = "Enter a valid email address."; return; }
+    if (DEMO.some(function (u) { return u.email === email; })) { box.className = "alert ok show"; box.textContent = "Demo accounts use the password " + DEMO_PASSWORD + "."; return; }
+    var btn = $("forgot-btn");
+    busy(btn, true, "Sending…");
+    try {
+      var res = await client(true).auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+      if (res.error) throw res.error;
+      box.className = "alert ok show";
+      box.textContent = "If " + email + " has a Zycount account, a reset link is on its way. Check your inbox and spam folder.";
+    } catch (ex) {
+      box.className = "alert err show";
+      box.textContent = friendly(ex);
+    }
+    busy(btn, false, "Send reset link");
+  });
+
+  // A reset link that failed (expired, already used) comes back with the reason in the address.
+  var linkError = new URLSearchParams(location.hash.replace(/^#/, "")).get("error_code") || params.get("error_code");
+  if (linkError && !recovering) {
+    $("auth").hidden = true; $("forgot").hidden = false;
+    $("forgot-msg").className = "alert err show";
+    $("forgot-msg").textContent = linkError === "otp_expired"
+      ? "That reset link has expired or was already used. Enter your email to get a new one."
+      : "That reset link didn't work. Enter your email to get a new one.";
+    history.replaceState(null, "", location.pathname);
+  }
+
+  // ── new password from the reset link ─────────
+  if (recovering) {
+    $("auth").hidden = true; $("recover").hidden = false;
+    var sb = client(true);
+    var ready = false;
+    sb.auth.onAuthStateChange(function (event) { if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") ready = true; });
+    $("form-recover").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var a = $("n-password").value, b = $("n-password2").value, box = $("recover-msg");
+      if (!validPassword(a)) { box.className = "alert err show"; box.textContent = "Use 8–72 characters, including a letter and a number."; return; }
+      if (a !== b) { box.className = "alert err show"; box.textContent = "The two passwords don't match."; return; }
+      var btn = $("recover-btn");
+      busy(btn, true, "Saving…");
+      try {
+        var s = await sb.auth.getSession();
+        if (!s.data.session) throw new Error("This reset link has expired or was already used. Ask for a new one.");
+        var res = await sb.auth.updateUser({ password: a });
+        if (res.error) throw res.error;
+        var u = s.data.session.user, meta = u.user_metadata || {};
+        startSession({ name: meta.full_name || u.email.split("@")[0], email: u.email }, true, "live");
+        location.replace("app.html#dashboard");
+      } catch (ex) {
+        busy(btn, false, "Save password and open my books");
+        box.className = "alert err show"; box.textContent = friendly(ex);
+      }
+    });
+    setTimeout(function () {
+      if (!ready) sb.auth.getSession().then(function (s) {
+        if (!s.data.session) { var box = $("recover-msg"); box.className = "alert err show"; box.textContent = "This reset link has expired or was already used. Go back and ask for a new one."; }
+      });
+    }, 2500);
+  }
+
+  if (invited) showOk("You've been invited to a set of books on Zycount. Sign in — or create an account — to accept.");
+  if (params.get("signedout") === "1") showOk("You've been signed out.");
+  if (params.get("expired") === "1") showErr("Your session ended. Sign in again to continue.");
+  if (location.hash === "#register-personal") { document.querySelector('input[value="PERSONAL"]').checked = true; applyKind(); showTab("register"); }
+  else if (location.hash === "#register") showTab("register");
+})();
+if (window.ZYTheme) ZYTheme.mount(document.getElementById("theme-btn"));
+</script>
+</body>
+</html>
