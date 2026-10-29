@@ -23,6 +23,7 @@
   [hidden]{display:none!important}
 </style>
 <title>Zycount Workspace</title>
+<script src="js/zy-theme.js"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -40,7 +41,7 @@
 }
 :root[data-density="relaxed"]{ --row-h:42px; --cell-y:11px; --cell-x:14px; }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
+  :root:not([data-theme]){
     color-scheme:dark;
     --paper:#0A0E17; --card:#111826; --sunk:#161E2E; --rail:#0C111B; --rail-2:#141B29;
     --rail-line:#222C3D; --rail-ink:#AEBACD; --rail-ink-2:#6C7A90;
@@ -60,6 +61,16 @@
   --brand:#7B80EE; --brand-soft:#1A1E3C;
   --good:#49BC86; --good-soft:#10281E; --warn:#D79A3F; --warn-soft:#2A2012; --bad:#EB6A83;
   --c1:#2172f5; --c2:#a96e07; --c3:#a644d7; --c4:#27915f; --c5:#0b86be; --c6:#df2248;
+}
+:root[data-theme="dim"]{
+  color-scheme:dark;
+  --paper:#1C2230; --card:#262D3D; --sunk:#2C3445; --rail:#181E2B; --rail-2:#222A3A;
+  --rail-line:#343D51; --rail-ink:#BDC5D3; --rail-ink-2:#8792A6;
+  --ink:#E4E8F0; --ink-2:#B9C1CF; --ink-3:#939DB0;
+  --line:#3A4357; --line-2:#313A4C;
+  --brand:#6D72E6; --brand-soft:#33375A;
+  --good:#5CC497; --good-soft:#233D33; --warn:#E0A957; --warn-soft:#3B3223; --bad:#F08496;
+  --c1:#4A86F5; --c2:#C18523; --c3:#B66BDF; --c4:#3BA575; --c5:#2A9ACD; --c6:#E2506F;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -1752,15 +1763,7 @@ const state = {
 if (!VALID.has(state.route)) state.route = "dashboard";
 document.documentElement.setAttribute("data-density", state.density);
 
-const savedTheme = store.get("zy.theme", null);
-if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
-document.getElementById("theme").addEventListener("click", () => {
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  const current = document.documentElement.getAttribute("data-theme") || (dark ? "dark" : "light");
-  const next = current === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  store.set("zy.theme", next);
-});
+if (window.ZYTheme) ZYTheme.mount(document.getElementById("theme"));
 
 function renderNav() {
   document.getElementById("nav").innerHTML = NAV.map((g) => `

@@ -9,6 +9,7 @@
 <meta property="og:description" content="Manage invoices, expenses and financial reporting in one organised workspace, built for Malaysian businesses.">
 <meta property="og:type" content="website">
 <link rel="icon" href="assets/zycount-mark.svg" type="image/svg+xml">
+<script src="js/zy-theme.js"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -23,7 +24,7 @@
   --r:12px; --wrap:1180px;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
+  :root:not([data-theme]){
     color-scheme:dark;
     --bg:#08101F; --bg-2:#0C1528; --card:#111C33; --sunk:#16223C; --rule:#22304D; --rule-2:#1A2742;
     --ink:#E8EDF6; --ink-2:#AEB9CD; --ink-3:#8290A8;
@@ -32,6 +33,24 @@
     --good:#4CC08A; --good-soft:#10291F; --warn:#DDA048; --warn-soft:#2A2113; --bad:#EE7085;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 36px -18px rgba(0,0,0,.6);
   }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#08101F; --bg-2:#0C1528; --card:#111C33; --sunk:#16223C; --rule:#22304D; --rule-2:#1A2742;
+  --ink:#E8EDF6; --ink-2:#AEB9CD; --ink-3:#8290A8;
+  --blue:#6B93FF; --blue-2:#8AABFF; --blue-soft:#17264A; --btn:#2F63F0; --btn-2:#3D70FA;
+  --navy:#060D1D; --navy-2:#0E1A34; --navy-line:#22325A;
+  --good:#4CC08A; --good-soft:#10291F; --warn:#DDA048; --warn-soft:#2A2113; --bad:#EE7085;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 36px -18px rgba(0,0,0,.6);
+}
+:root[data-theme="dim"]{
+  color-scheme:dark;
+  --bg:#1C2230; --bg-2:#212837; --card:#272F40; --sunk:#2D3648; --rule:#3A4459; --rule-2:#323B4E;
+  --ink:#E4E8F0; --ink-2:#B9C1CF; --ink-3:#939DB0;
+  --blue:#86A6FF; --blue-2:#A0B9FF; --blue-soft:#2C3A5E; --btn:#3A6AF0; --btn-2:#4A77F5;
+  --navy:#161C2A; --navy-2:#202839; --navy-line:#343E55; --on-navy:#C3CBDA;
+  --good:#5CC497; --good-soft:#233D33; --warn:#E0A957; --warn-soft:#3B3223; --bad:#F08496;
+  --shadow:0 1px 2px rgba(0,0,0,.2),0 14px 32px -18px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:76px}
@@ -93,6 +112,8 @@ nav.links a:hover{color:var(--ink)}
 .head-cta{margin-left:auto;display:flex;gap:8px;align-items:center}
 .head-cta .login{font-size:14.5px;font-weight:500;text-decoration:none;padding:8px 12px}
 .head-cta .btn{padding:9px 16px;font-size:14.5px}
+.theme-btn{display:grid;width:42px;height:42px;border-radius:10px;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer;place-items:center}
+.theme-btn:hover{border-color:var(--ink-3)}
 .menu-btn{display:none;margin-left:4px;width:42px;height:42px;border-radius:10px;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer;place-items:center}
 .menu-btn svg{width:20px;height:20px}
 .mobile-nav{display:none;border-top:1px solid var(--rule);background:var(--bg);padding:8px 16px 16px}
@@ -434,6 +455,7 @@ footer.site .legal{grid-column:1/-1;border-top:1px solid var(--navy-line);paddin
       <a href="#faq">FAQ</a>
     </nav>
     <div class="head-cta">
+      <button class="theme-btn" id="theme-btn" type="button" aria-label="Theme"></button>
       <a class="login" href="login.html">Log in</a>
       <a class="btn btn-primary" href="login.html#register">Get Started</a>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open menu">
@@ -885,6 +907,7 @@ footer.site .legal{grid-column:1/-1;border-top:1px solid var(--navy-line);paddin
 (function () {
   "use strict";
   document.documentElement.classList.add("js");
+  if (window.ZYTheme) ZYTheme.mount(document.getElementById("theme-btn"));
 
   /* ── Pricing: edit plans here. price: null shows "to be announced". ── */
   var PRICING = {

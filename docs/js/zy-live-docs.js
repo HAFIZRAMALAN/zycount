@@ -104,7 +104,7 @@
   .zv.zv .zv-void span{transform:rotate(-24deg);font-size:84px;font-weight:800;letter-spacing:.1em;color:rgba(200,30,30,.13);border:6px solid rgba(200,30,30,.13);padding:4px 26px;border-radius:10px}
   @media (max-width:640px){.zv.zv{padding:20px 16px}.zv.zv .zv-top{flex-direction:column}.zv.zv .zv-ttl{text-align:left}.zv.zv .zv-meta{margin-left:0}.zv.zv .zv-party{grid-template-columns:1fr 1fr}}
   .zl-vwrap{background:#eef0f4;padding:18px;border-radius:8px;overflow:auto;max-height:70vh}
-  html.zl-live.dark .zl-vwrap,html[data-theme="dark"] .zl-vwrap{background:#23262e}
+  html.zl-live.dark .zl-vwrap,html[data-theme="dark"] .zl-vwrap,html[data-theme="dim"] .zl-vwrap{background:#23262e}
   .zl-tpl{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:20px;align-items:start}
   .zl-tpl .zl-vwrap{max-height:none;position:sticky;top:12px}
   @media (max-width:1000px){.zl-tpl{grid-template-columns:1fr}.zl-tpl .zl-vwrap{position:static}}
