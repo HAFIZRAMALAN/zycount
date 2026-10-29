@@ -734,7 +734,7 @@
     --r:12px;
   }
   @media (prefers-color-scheme:dark){
-    html.zl-live:not([data-theme="light"]){
+    html.zl-live:not([data-theme]){
       --paper:#0B0F17; --card:#121824; --sunk:#182030; --line:#253044; --line-2:#1C2434;
       --ink:#EEF2F8; --ink-2:#B4BFCE; --ink-3:#8793A6;
       --brand:#8C91F4; --brand-soft:#1D2146;
@@ -748,6 +748,13 @@
     --brand:#8C91F4; --brand-soft:#1D2146;
     --good:#4ACB8E; --good-soft:#0F2A1F; --warn:#EDAA4E; --warn-soft:#2C2214; --bad:#F27D8E; --bad-soft:#2F151A;
     --c1:#8C91F4; --c2:#F5A742; --c4:#4ACB8E; --c5:#46B8F0;
+  }
+  html.zl-live[data-theme="dim"]{
+    --paper:#1C2230; --card:#262D3D; --sunk:#2C3445; --line:#3A4357; --line-2:#313A4C;
+    --ink:#E4E8F0; --ink-2:#B9C1CF; --ink-3:#939DB0;
+    --brand:#6D72E6; --brand-soft:#33375A;
+    --good:#5CC497; --good-soft:#233D33; --warn:#E0A957; --warn-soft:#3B3223; --bad:#F08496; --bad-soft:#40242B;
+    --c1:#8F95F2; --c2:#F0B055; --c4:#5CC497; --c5:#5BBDEB;
   }
   html.zl-live body{background:var(--paper);font-size:14px}
   html.zl-live .mono{font-family:inherit;font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}

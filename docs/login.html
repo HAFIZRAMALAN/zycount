@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Sign in to Zycount — double-entry accounting for Malaysian businesses and personal finances.">
 <title>Sign in · Zycount</title>
+<script src="js/zy-theme.js"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -17,13 +18,27 @@
   --r:10px;
 }
 @media (prefers-color-scheme:dark){
-  :root{
+  :root:not([data-theme]){
     color-scheme:dark;
     --paper:#0B0F17; --card:#121824; --sunk:#182030; --rail:#0C111B; --rail-2:#141B29; --rail-line:#222C3D;
     --ink:#EEF2F8; --ink-2:#B4BFCE; --ink-3:#8793A6; --line:#253044;
     --brand:#8C91F4; --brand-2:#A5A9F7; --brand-soft:#1D2146;
     --good:#4ACB8E; --good-soft:#0F2A1F; --bad:#F27D8E; --bad-soft:#2F151A;
   }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0B0F17; --card:#121824; --sunk:#182030; --rail:#0C111B; --rail-2:#141B29; --rail-line:#222C3D;
+  --ink:#EEF2F8; --ink-2:#B4BFCE; --ink-3:#8793A6; --line:#253044;
+  --brand:#8C91F4; --brand-2:#A5A9F7; --brand-soft:#1D2146;
+  --good:#4ACB8E; --good-soft:#0F2A1F; --bad:#F27D8E; --bad-soft:#2F151A;
+}
+:root[data-theme="dim"]{
+  color-scheme:dark;
+  --paper:#1C2230; --card:#262D3D; --sunk:#2C3445; --rail:#181E2B; --rail-2:#222A3A; --rail-line:#343D51;
+  --ink:#E4E8F0; --ink-2:#B9C1CF; --ink-3:#939DB0; --line:#3A4357;
+  --brand:#6D72E6; --brand-2:#7D82EC; --brand-soft:#33375A;
+  --good:#5CC497; --good-soft:#233D33; --bad:#F08496; --bad-soft:#40242B;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -59,6 +74,9 @@ a:hover{text-decoration:underline}
 .panel{width:100%;max-width:420px}
 .top-link{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;font-size:13px;color:var(--ink-3)}
 .mobile-logo{display:none}
+.top-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.theme-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);display:grid;place-items:center;cursor:pointer}
+.theme-btn:hover{color:var(--ink)}
 h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-.015em}
 .sub{color:var(--ink-2);margin:0 0 24px}
 .tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--sunk);border-radius:10px;padding:4px;margin-bottom:22px}
@@ -137,7 +155,7 @@ h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-.015em}
     <div class="panel">
       <div class="top-link">
         <a class="logo mobile-logo" href="index.html" style="color:var(--ink)"><span class="mark">Z</span>Zycount</a>
-        <a href="index.html">← zycount home</a>
+        <span class="top-right"><a href="index.html">← zycount home</a><button class="theme-btn" id="theme-btn" type="button" aria-label="Theme"></button></span>
       </div>
 
       <!-- Sign in / create account -->
@@ -558,6 +576,7 @@ h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-.015em}
   if (params.get("expired") === "1") showErr("Your session ended. Sign in again to continue.");
   if (location.hash === "#register") showTab("register");
 })();
+if (window.ZYTheme) ZYTheme.mount(document.getElementById("theme-btn"));
 </script>
 </body>
 </html>
