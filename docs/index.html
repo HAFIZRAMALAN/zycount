@@ -291,6 +291,7 @@ table.st td.ind{padding-left:14px}
 .plan .price span{color:var(--ink-3);font-size:14px}
 .plan .price .tba{font:600 20px "IBM Plex Sans",sans-serif;letter-spacing:-.01em;color:var(--ink-2)}
 .plan .desc{color:var(--ink-2);font-size:14.5px}
+.plan .yearly{margin-top:4px;font-size:13.5px;color:var(--ink-3)}
 .plan ul{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14.5px;color:var(--ink-2)}
 .plan li{display:flex;gap:10px}
 .plan li::before{content:"✓";color:var(--good);font-weight:700}
@@ -913,16 +914,16 @@ footer.site .legal{grid-column:1/-1;border-top:1px solid var(--navy-line);paddin
   var PRICING = {
     currency: "RM",
     period: "/month",
-    note: "Prices are placeholders and will be confirmed before launch.",
+    note: "Prices are per company. Pay yearly and get two months free. Extra companies RM 29/month each.",
     plans: [
-      { name: "Starter", price: null, desc: "For sole proprietors and new businesses.",
-        features: ["1 company", "Invoices, bills & receipts", "Bank reconciliation", "Standard reports"],
+      { name: "Starter", price: 49, yearly: 490, desc: "For sole proprietors and new businesses.",
+        features: ["1 user", "Invoices, bills & receipts", "Bank reconciliation", "Financial reports", "LHDN MyInvois e-Invoice"],
         cta: "Get Started", href: "login.html#register" },
-      { name: "Business", price: null, popular: true, desc: "For growing teams that share the books.",
-        features: ["Everything in Starter", "Team members with roles", "Receipt capture & documents", "LHDN MyInvois e-Invoice"],
+      { name: "Business", price: 99, yearly: 990, popular: true, desc: "For growing teams that share the books.",
+        features: ["Everything in Starter", "Up to 5 users with roles", "Receipt capture & documents", "AR/AP contra & cash book"],
         cta: "Get Started", href: "login.html#register" },
-      { name: "Enterprise", price: null, desc: "For groups with several companies.",
-        features: ["Everything in Business", "Multiple companies", "Auditor & read-only access", "Priority onboarding"],
+      { name: "Pro", price: 199, yearly: 1990, desc: "For established businesses and their accountants.",
+        features: ["Everything in Business", "Unlimited users", "Auditor & read-only access", "Priority support"],
         cta: "Get Started", href: "login.html#register" }
     ]
   };
@@ -1083,9 +1084,10 @@ footer.site .legal{grid-column:1/-1;border-top:1px solid var(--navy-line);paddin
     var price = p.price == null
       ? '<b class="tba">Price to be announced</b>'
       : '<b>' + esc(PRICING.currency) + ' ' + esc(p.price) + '</b><span>' + esc(PRICING.period) + '</span>';
+    var yearly = p.yearly ? '<p class="yearly">or ' + esc(PRICING.currency) + ' ' + esc(p.yearly.toLocaleString("en-MY")) + ' a year</p>' : '';
     return '<article class="plan reveal' + (p.popular ? ' pop' : '') + '">' + (p.popular ? '<span class="badge">Most popular</span>' : '') +
       '<div><h3>' + esc(p.name) + '</h3><p class="desc" style="margin-top:6px">' + esc(p.desc) + '</p></div>' +
-      '<div class="price">' + price + '</div>' +
+      '<div><div class="price">' + price + '</div>' + yearly + '</div>' +
       '<ul>' + p.features.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join("") + '</ul>' +
       '<a class="btn ' + (p.popular ? 'btn-primary' : 'btn-ghost') + '" href="' + esc(p.href) + '">' + esc(p.cta) + '</a></article>';
   }).join("");
