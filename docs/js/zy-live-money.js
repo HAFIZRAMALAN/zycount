@@ -218,7 +218,7 @@
         });
         try { if (money.some((a) => a.id === v.money)) localStorage.setItem(prefKey, v.money); } catch (_) { /* ignore */ }
         if (cap) await cap.link("JOURNAL", r.id);
-        ZL.toast(r.doc_no ? `Recorded as ${r.doc_no} and posted (${r.reference}).` : `Recorded and posted as ${r.reference}.`);
+        ZL.toast(r.status === "PENDING" ? ZL.pendingMsg(r) : r.doc_no ? `Recorded as ${r.doc_no} and posted (${r.reference}).` : `Recorded and posted as ${r.reference}.`);
         return r;
       },
     }).then((r) => { if (r) ZL.refresh(); return r; });

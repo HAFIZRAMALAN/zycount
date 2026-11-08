@@ -339,7 +339,7 @@
       }
     } });
     const m = ZL.modal({ title: `${doc ? "Draft" : "New"} ${t.label.toLowerCase()}${doc && d.reference && d.source_doc_id ? ` — from ${d.reference}` : ""}`, wide: true, body, actions,
-      onClose: () => { if (result) { const r = result; ZL.toast(r.status === "POSTED" ? `${t.label} ${r.doc_no} ${t.posts ? "posted" : "issued"}${r.reference ? ` (${r.reference})` : ""}.` : "Draft saved."); ZL.open("tradedoc", { id: r.id }); } } });
+      onClose: () => { if (result) { const r = result; ZL.toast(r.status === "POSTED" ? `${t.label} ${r.doc_no} ${t.posts ? "posted" : "issued"}${r.reference ? ` (${r.reference})` : ""}.` : r.status === "PENDING" ? ZL.pendingMsg(r) : "Draft saved."); ZL.open("tradedoc", { id: r.id }); } } });
     const root = m.root;
     root.querySelector(".zl-modal").classList.add("xl");
     sel = (n) => { const el = root.querySelector(`[name="${n}"]`); return el ? el.value : ""; };
@@ -554,7 +554,7 @@
       } }],
       onClose: () => {
         if (preset.onDone) { preset.onDone(result); return; }
-        if (result) { ZL.toast(`${t.label} ${result.doc_no} posted (${result.reference}).`); ZL.open("tradedoc", { id: result.id }); }
+        if (result) { ZL.toast(result.status === "PENDING" ? ZL.pendingMsg(result) : `${t.label} ${result.doc_no} posted (${result.reference}).`); ZL.open("tradedoc", { id: result.id }); }
       } });
     const root = m.root;
     const numCtl = numFields.length ? ZL.numbering.wire(root, numRows, seriesKind(type), { dateInput: root.querySelector('[name="date"]'),
@@ -688,8 +688,9 @@
       const btn = (attr, label, cls = "") => `<button type="button" class="zl-btn ${cls}" ${attr}>${label}</button>`;
       const acts = [];
       if (d.status === "DRAFT") {
-        if (can("journal.create")) acts.push(btn("data-edit", "Edit"));
-        if (can("journal.delete")) acts.push(btn("data-del", "Delete draft", "ghost"));
+        const held = d.approval_status === "PENDING";   // waiting for approval: locked until withdrawn
+        if (can("journal.create") && !held) acts.push(btn("data-edit", "Edit"));
+        if (can("journal.delete") && !held) acts.push(btn("data-del", "Delete draft", "ghost"));
       } else {
         acts.push(btn("data-print", "Print", "ghost"), btn("data-pdf", "Download PDF"));
         if (d.status === "POSTED") {
@@ -729,7 +730,7 @@
           <td class="r">${d.status === "POSTED" && ZL.can("journal.post") ? `<button type="button" class="zl-btn sm ghost" data-unalloc="${a.id}">Remove</button>` : ""}</td></tr>`).join("")}</tbody></table></div></section>` : "";
       return `<div class="zl-crumbs"><button type="button" class="zl-ref" data-back>${t.side === "AR" ? "Sales" : "Purchases"}</button> / ${E(t.label)}</div>` +
         ZL.header(`${b.title || t.label} ${d.doc_no || "(draft)"}`, d.status === "VOID" ? `Voided ${ZL.date(d.void_date)} — ${d.void_reason || ""}` : d.status === "DRAFT" ? "Draft — not in the books until you post it." : `${t.posts ? "Posted" : "Issued"} ${ZL.dateTime(d.posted_at)}`,
-          acts.join("")) + `
+          acts.join("")) + (ZL.approvalBanner ? ZL.approvalBanner("DOC", d) : "") + `
         <section class="card"><div class="zl-facts"><div><span>Side</span><b>${ZL.sideTag(t.side)}</b></div>${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${v}</b></div>`).join("")}<div><span>Status</span><b>${statusChip(d)}</b></div></div></section>
         <div data-einv></div>
         <div class="zl-vwrap" style="margin-top:16px;max-height:none">${html}</div>${progTable}${allocTable}<div data-attach></div>`;
@@ -740,6 +741,7 @@
       const d = b.doc, t = T[d.doc_type];
       const html = () => ZL.tradeDocHtml(b);
       const on = (sel, fn) => root.querySelectorAll(sel).forEach((el) => el.addEventListener("click", () => fn(el)));
+      if (ZL.wireApproval) ZL.wireApproval(root, [{ id: d.id, doc_type: d.doc_type, amount: d.total, number: d.draft_doc_no }]);
       on("[data-back]", () => go(SIDE[t.side].route));
       on("[data-edit]", () => (t.lines ? ZL.tradeEdit(d.doc_type, d.id) : null));
       on("[data-del]", async () => {
@@ -1361,7 +1363,7 @@
         if (cap) await cap.link("JOURNAL", result.id);
         close();
       } }],
-      onClose: () => { if (result) { ZL.toast(`Posted as ${result.doc_no} (${result.reference}).`); ZL.refresh(); } } });
+      onClose: () => { if (result) { ZL.toast(result.status === "PENDING" ? ZL.pendingMsg(result) : `Posted as ${result.doc_no} (${result.reference}).`); ZL.refresh(); } } });
     const root = m.root;
     const tb = root.querySelector("#zl-cl");
     function read(tr) { const l = rows[Number(tr.dataset.ln)]; tr.querySelectorAll("[data-f]").forEach((el) => { l[el.dataset.f] = el.value.trim(); }); }

@@ -610,14 +610,17 @@
           "It may have been a draft that was deleted, or it belongs to another company.", `<p style="margin-top:12px">${btn("zl-back", "Back to journals")}</p>`);
       }
       const lines = await ZL.select("journal_lines", "account_id,line_no,description,debit,credit,project_id", (q) => q.eq("journal_entry_id", entry.id).order("line_no"));
-      if (entry.status === "DRAFT" && ZL.can("journal.edit")) {
+      const apr = ZL.approvalBanner ? ZL.approvalBanner("JOURNAL", entry) : "";
+      ctx.aprRow = { id: entry.id, doc_type: entry.doc_type || "JV", amount: entry.total_debit, number: entry.doc_no || entry.draft_reference };
+      if (entry.status === "DRAFT" && ZL.can("journal.edit") && entry.approval_status !== "PENDING") {
         const numbering = ZL.can("journal.post") ? await ZL.numbering.load(entry.date).catch(() => []) : [];
-        return editorHtml(Object.assign({}, entry, { lines, numbering }), accounts);
+        return editorHtml(Object.assign({}, entry, { lines, numbering }), accounts).replace('<section class="card" id="zl-je"', apr + '<section class="card" id="zl-je"');
       }
       ctx.entry = entry;
-      return detailHtml(entry, lines, accounts) + '<div data-attach></div>';
+      return detailHtml(entry, lines, accounts).replace('<section class="card" id="zl-jd">', apr + '<section class="card" id="zl-jd">') + '<div data-attach></div>';
     },
     after(root, ctx) {
+      if (ZL.wireApproval && ctx.aprRow) ZL.wireApproval(root, [ctx.aprRow]);
       const back = root.querySelector("#zl-back");
       if (back) back.addEventListener("click", () => go("journals"));
       if (root.querySelector("#zl-lines")) wireEditor(root, ctx);
@@ -838,7 +841,7 @@
         }
         try {
           const r = await ZL.rpc("post_journal", { p_id: id, p_series: num.p_series || null, p_reference: num.p_doc_no || null });
-          ZL.toast(`Posted ${r.reference} · ${M(r.total, { symbol: true })}`);
+          ZL.toast(r.status === "PENDING" ? ZL.pendingMsg(r) : `Posted ${r.reference} · ${M(r.total, { symbol: true })}`);
           window.removeEventListener("beforeunload", onUnload);
           ZL.open("journal", { id });
         } catch (e) {

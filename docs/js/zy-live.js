@@ -571,7 +571,7 @@
     Object.assign(ICONS, EXTRA_ICONS); // app.html's icon set is defined after this file loads
     const P = ZL.isPersonal();
     const groups = [
-      { label: "", items: [["dashboard", "Dashboard", "dash"], ["capture", "Inbox", "camera"], ["transactions", P ? "Money in & out" : "Transactions", "swap"], ["owed", "Money owed", "scale"]] },
+      { label: "", items: [["dashboard", "Dashboard", "dash"], ["capture", "Inbox", "camera"], ["transactions", P ? "Money in & out" : "Transactions", "swap"], ["owed", "Money owed", "scale"], ["approvals", "Approvals", "shield"]] },
       { label: "Sales · money in", items: [["sales", "Sales documents", "invoice"], ["customers", "Customers", "users"], ["araging", "Receivables aging", "clock"], ["items", "Items & services", "box"]] },
       { label: "Purchases · money out", items: [["purchases", "Purchase documents", "truck"], ["grns", "Goods received", "box"], ["suppliers", "Suppliers", "building"], ["apaging", "Payables aging", "clock"]] },
       { label: "Inventory", items: [["stock", "Stock on hand", "box"], ["stockdocs", "Stock adjustments", "list"], ["warehouses", "Warehouses", "building"]] },
