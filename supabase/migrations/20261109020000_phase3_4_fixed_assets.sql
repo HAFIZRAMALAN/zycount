@@ -426,7 +426,15 @@ begin
   with reg as (
     select cost_account_id acc, sum(cost) amt from public.fixed_assets where company_id = p_company and status = 'ACTIVE' group by 1
     union all
-    select accum_account_id, -sum(accumulated) from public.fixed_assets where company_id = p_company and status = 'ACTIVE' group by 1),
+    select accum_account_id, -sum(accumulated) from public.fixed_assets where company_id = p_company and status = 'ACTIVE' group by 1
+    union all
+    -- Every account under 1500 Property, Plant and Equipment, so a purchase not yet registered shows as a difference.
+    select a.id, 0 from public.accounts a join public.accounts h on h.id = a.parent_id
+     where a.company_id = p_company and h.code = '1500' and a.is_postable
+    union all
+    select cost_account_id, 0 from public.fixed_assets where company_id = p_company
+    union all
+    select accum_account_id, 0 from public.fixed_assets where company_id = p_company),
   accs as (select acc, sum(amt) reg from reg group by acc),
   gl as (select l.account_id acc, sum(l.debit - l.credit) bal from public.journal_lines l join public.journal_entries e on e.id = l.journal_entry_id
           where e.company_id = p_company and e.status <> 'DRAFT' and l.account_id in (select acc from accs) group by 1)
