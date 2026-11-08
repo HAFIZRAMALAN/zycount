@@ -185,6 +185,15 @@ jobs:
         working-directory: e2e
         run: npx playwright test
 
+      - name: Keep the screens for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screens
+          path: e2e/screens
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Keep the report when something fails
         if: failure()
         uses: actions/upload-artifact@v4

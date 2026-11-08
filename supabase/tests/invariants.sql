@@ -13,6 +13,7 @@ declare
   j jsonb; jid uuid; r jsonb; t text; n numeric; k int; p record;
   cu uuid; su uuid; iv jsonb; bill jsonb; st jsonb; line uuid;
   checks int := 0;
+  it uuid; wh2 uuid; ia uuid; ca2 uuid; q numeric; v numeric;
   probe text;
 begin
   -- ── Two people, each with their own business books ───────────────────────
@@ -229,6 +230,87 @@ begin
   r := public.attention_summary(ca);
   if not (r->>'can_view')::boolean or (r->>'open_past_periods') is null then raise exception 'FAIL: attention_summary incomplete: %', r; end if;
   checks := checks + 1;
+
+  -- ── H. Inventory (Phase 3.2): weighted-average cost, COGS, warehouses ────
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  it := public.save_item(ca, null, '{"code":"STK-1","description":"Stock widget","track_stock":true,"buy_price":5}'::jsonb);
+  select inventory_account_id, cogs_account_id into ia, ca2 from public.items where id = it;
+  if ia is null or ca2 is null then raise exception 'FAIL: a stock item did not get default inventory and COGS accounts'; end if;
+  checks := checks + 1;
+
+  perform public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'STK-B1'),
+    jsonb_build_array(jsonb_build_object('item_id', it, 'qty', 10, 'unit_price', 5)), true);
+  perform public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'STK-B2'),
+    jsonb_build_array(jsonb_build_object('item_id', it, 'qty', 10, 'unit_price', 7)), true);
+  select qty, value into q, v from public.item_costs where item_id = it;
+  if q <> 20 or v <> 120 then raise exception 'FAIL: two purchases gave % units worth %, expected 20 worth 120', q, v; end if;
+  checks := checks + 1;
+
+  iv := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'INVOICE', 'contact_id', cu, 'date', current_date),
+    jsonb_build_array(jsonb_build_object('item_id', it, 'qty', 5, 'unit_price', 20, 'account_id', rev)), true);
+  select coalesce(sum(debit - credit), 0) into n from public.journal_lines where journal_entry_id = (iv->>'journal_id')::uuid and account_id = ca2;
+  select qty, value into q, v from public.item_costs where item_id = it;
+  if n <> 30 or q <> 15 or v <> 90 then
+    raise exception 'FAIL: selling 5 at average 6.00 posted COGS % and left % units worth %', n, q, v;
+  end if;
+  checks := checks + 1;
+
+  begin
+    perform public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'INVOICE', 'contact_id', cu, 'date', current_date),
+      jsonb_build_array(jsonb_build_object('item_id', it, 'qty', 100, 'unit_price', 20, 'account_id', rev)), true);
+    raise exception 'FAIL: sold more stock than was on hand';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like 'STOCK_SHORT:%' then raise exception 'FAIL: overselling refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  checks := checks + 1;
+
+  wh2 := public.save_warehouse(ca, null, '{"code":"WH2","name":"Second store"}'::jsonb);
+  perform public.post_stock_transfer(ca, jsonb_build_object('date', current_date, 'to_warehouse_id', wh2,
+    'lines', jsonb_build_array(jsonb_build_object('item_id', it, 'qty', 4))));
+  select qty into q from public.stock_balances where item_id = it and warehouse_id = wh2;
+  select value into v from public.item_costs where item_id = it;
+  if q <> 4 or v <> 90 then raise exception 'FAIL: a transfer moved % units and changed the value to %', q, v; end if;
+  checks := checks + 1;
+
+  perform public.post_stock_adjustment(ca, jsonb_build_object('kind', 'COUNT', 'date', current_date, 'warehouse_id', wh2,
+    'lines', jsonb_build_array(jsonb_build_object('item_id', it, 'counted', 3))));
+  select qty, value into q, v from public.item_costs where item_id = it;
+  if q <> 14 or v <> 84 then raise exception 'FAIL: counting 3 of 4 left % units worth %, expected 14 worth 84', q, v; end if;
+  checks := checks + 1;
+
+  perform public.void_trade_doc((iv->>'id')::uuid, current_date, 'inventory test');
+  select qty, value into q, v from public.item_costs where item_id = it;
+  if q <> 19 or v <> 114 then raise exception 'FAIL: voiding the sale left % units worth %, expected 19 worth 114', q, v; end if;
+  checks := checks + 1;
+
+  r := public.stock_gl_check(ca);
+  if not (r->>'in_balance')::boolean then raise exception 'FAIL: stock value and the inventory account disagree: %', r; end if;
+  select count(*) into k from public.items i join public.item_costs c on c.item_id = i.id
+   where i.company_id = ca and (c.qty <> (select coalesce(sum(qty), 0) from public.stock_moves where item_id = i.id)
+                             or c.value <> (select coalesce(sum(value), 0) from public.stock_moves where item_id = i.id)
+                             or c.qty <> (select coalesce(sum(qty), 0) from public.stock_balances where item_id = i.id));
+  if k <> 0 then raise exception 'FAIL: running stock balances drifted from the stock ledger'; end if;
+  checks := checks + 2;
+
+  perform set_config('role', 'postgres', true);
+  begin
+    update public.stock_moves set qty = qty + 1 where item_id = it;
+    raise exception 'FAIL: a stock movement was edited';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.post_stock_adjustment(ca, jsonb_build_object('date', current_date,
+      'lines', jsonb_build_array(jsonb_build_object('item_id', it, 'qty', 1000, 'unit_cost', 1))));
+    raise exception 'FAIL: another company adjusted these books'' stock';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  select count(*) into k from public.stock_moves where company_id = ca;
+  if k <> 0 then raise exception 'FAIL: another company can see % stock movements', k; end if;
+  checks := checks + 2;
 
   -- A payment marked paid twice extends the plan once.
   perform set_config('role', 'postgres', true);
