@@ -14,6 +14,7 @@ declare
   cu uuid; su uuid; iv jsonb; bill jsonb; st jsonb; line uuid;
   checks int := 0;
   it uuid; wh2 uuid; ia uuid; ca2 uuid; q numeric; v numeric;
+  it2 uuid; po jsonb; grn jsonb; grn2 jsonb; pl uuid; g1 uuid; g2 uuid; bx jsonb;
   probe text;
 begin
   -- ── Two people, each with their own business books ───────────────────────
@@ -300,6 +301,86 @@ begin
     raise exception 'FAIL: a stock movement was edited';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
   checks := checks + 1;
+
+  -- ── I. Purchasing (3.3): order → goods received → invoice, three-way match ─
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  it2 := public.save_item(ca, null, '{"code":"STK-2","description":"Matched widget","track_stock":true}'::jsonb);
+  po := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'PURCHASE_ORDER', 'contact_id', su, 'date', current_date),
+    jsonb_build_array(jsonb_build_object('item_id', it2, 'qty', 10, 'unit_price', 5)), true);
+  select id into pl from public.trade_doc_lines where doc_id = (po->>'id')::uuid;
+  grn := public.post_goods_receipt(ca, jsonb_build_object('po_id', po->>'id', 'date', current_date, 'reference', 'DO-1',
+    'lines', jsonb_build_array(jsonb_build_object('po_line_id', pl, 'qty', 6))));
+  select qty, value into q, v from public.item_costs where item_id = it2;
+  r := public.grni_check(ca);
+  if q <> 6 or v <> 30 or (r->>'gl_balance')::numeric <> 30 or not (r->>'in_balance')::boolean then
+    raise exception 'FAIL: receiving 6 of 10 at 5.00 gave % units worth %, GRNI %', q, v, r;
+  end if;
+  checks := checks + 1;
+
+  begin
+    perform public.post_goods_receipt(ca, jsonb_build_object('po_id', po->>'id', 'date', current_date,
+      'lines', jsonb_build_array(jsonb_build_object('po_line_id', pl, 'qty', 5))));
+    raise exception 'FAIL: received more than was ordered';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like 'MATCH:%' then raise exception 'FAIL: over-receipt refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  checks := checks + 1;
+
+  grn2 := public.post_goods_receipt(ca, jsonb_build_object('po_id', po->>'id', 'date', current_date,
+    'lines', jsonb_build_array(jsonb_build_object('po_line_id', pl, 'qty', 4))));
+  select id into g1 from public.goods_receipt_lines where stock_doc_id = (grn->>'id')::uuid;
+  select id into g2 from public.goods_receipt_lines where stock_doc_id = (grn2->>'id')::uuid;
+
+  begin
+    perform public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'M-0'),
+      jsonb_build_array(jsonb_build_object('item_id', it2, 'qty', 12, 'unit_price', 5, 'grn_line_id', g1)), true);
+    raise exception 'FAIL: invoiced more than was received';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like 'MATCH:%' then raise exception 'FAIL: over-invoicing refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  begin
+    perform public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'M-1'),
+      jsonb_build_array(jsonb_build_object('item_id', it2, 'qty', 6, 'unit_price', 5.5, 'grn_line_id', g1)), true);
+    raise exception 'FAIL: a price 10%% above the order posted without confirmation';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like 'PRICE_VARIANCE:%' then raise exception 'FAIL: price difference refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  checks := checks + 2;
+
+  bx := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'M-1',
+      'allow_price_variance', true),
+    jsonb_build_array(jsonb_build_object('item_id', it2, 'qty', 6, 'unit_price', 5.5, 'grn_line_id', g1)), true);
+  select value into v from public.item_costs where item_id = it2;
+  r := public.grni_check(ca);
+  if v <> 53 or (r->>'open_value')::numeric <> 20 or not (r->>'in_balance')::boolean then
+    raise exception 'FAIL: a confirmed +0.50 difference on 6 units left stock worth % and GRNI %', v, r;
+  end if;
+  r := public.stock_gl_check(ca);
+  if not (r->>'in_balance')::boolean then raise exception 'FAIL: stock and ledger disagree after a price difference: %', r; end if;
+  checks := checks + 2;
+
+  begin
+    perform public.void_stock_doc((grn->>'id')::uuid, current_date, 'test');
+    raise exception 'FAIL: voided goods received that were already invoiced';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+
+  perform public.void_trade_doc((bx->>'id')::uuid, current_date, 'test');
+  perform public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'M-2'),
+    jsonb_build_array(jsonb_build_object('item_id', it2, 'qty', 6, 'unit_price', 5, 'grn_line_id', g1),
+                      jsonb_build_object('item_id', it2, 'qty', 4, 'unit_price', 5, 'grn_line_id', g2)), true);
+  select value into v from public.item_costs where item_id = it2;
+  r := public.grni_check(ca);
+  if v <> 50 or (r->>'open_value')::numeric <> 0 or (r->>'gl_balance')::numeric <> 0 then
+    raise exception 'FAIL: after voiding and invoicing in full, stock is worth % and GRNI %', v, r;
+  end if;
+  select count(*) into k from public.grn_open_lines(ca);
+  if k <> 0 then raise exception 'FAIL: % goods-received lines still show as not invoiced', k; end if;
+  checks := checks + 2;
 
   perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
   perform set_config('role', 'authenticated', true);

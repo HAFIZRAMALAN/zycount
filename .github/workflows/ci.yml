@@ -183,6 +183,8 @@ jobs:
 
       - name: Run the tests
         working-directory: e2e
+        env:
+          E2E_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: npx playwright test
 
       - name: Keep the screens for review
