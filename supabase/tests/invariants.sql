@@ -135,7 +135,8 @@ begin
     format('select count(*) from public.trade_open_docs(%L)', cu),
     format('select public.void_trade_doc(%L, current_date, %L)::text', iv->>'id', 'x'),
     format('select public.sst_summary(%L, current_date, current_date)::text', ca),
-    format('select public.bank_accept_suggestions(%L)::text', st->>'id')] loop
+    format('select public.bank_accept_suggestions(%L)::text', st->>'id'),
+    format('select public.attention_summary(%L)::text', ca)] loop
     begin
       execute probe into t;
       raise exception 'FAIL: another company''s user ran: %', probe;
@@ -211,6 +212,11 @@ begin
      <> (select coalesce(sum((x->>'movement')::numeric), 0) from jsonb_array_elements(r->'accounts') x where x->>'role' = 'OUTPUT') then
     raise exception 'FAIL: SST from documents differs from the output-tax account: %', r;
   end if;
+  checks := checks + 1;
+
+  -- The worklist sees its own books' drafts and open periods.
+  r := public.attention_summary(ca);
+  if not (r->>'can_view')::boolean or (r->>'open_past_periods') is null then raise exception 'FAIL: attention_summary incomplete: %', r; end if;
   checks := checks + 1;
 
   -- A payment marked paid twice extends the plan once.

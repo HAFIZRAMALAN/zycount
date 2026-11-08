@@ -645,9 +645,7 @@
     const railTitle = document.querySelector(".rail-top small");
     if (railTitle) railTitle.textContent = c ? (c.kind === "PERSONAL" ? "Personal books" : "Business books") : "";
     const railFoot = document.querySelector(".rail-foot");
-    if (railFoot) railFoot.textContent = c && c.kind === "PERSONAL"
-      ? "Budgets and bank import come next."
-      : "Invoices, bills, bank feeds and payroll come next.";
+    if (railFoot && !railFoot.querySelector(".zk-plan")) railFoot.textContent = ""; // the shell shows the plan here
 
     const co = document.querySelector(".topbar .co");
     if (co && c) {

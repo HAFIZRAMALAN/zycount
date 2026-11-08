@@ -135,6 +135,8 @@ nav.links a:hover{color:var(--ink)}
 .hero .fine{display:flex;gap:20px;flex-wrap:wrap;color:#9FB0D0;font-size:13.5px}
 .hero .fine span{display:inline-flex;align-items:center;gap:7px}
 .hero .fine span::before{content:"";width:6px;height:6px;border-radius:50%;background:#4CC08A}
+.hero .caps{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.hero .caps li{font-size:12.5px;color:#C9D5EE;border:1px solid rgba(160,180,220,.28);border-radius:99px;padding:4px 11px;background:rgba(255,255,255,.04)}
 .stack{position:relative;min-height:440px}
 .stack .panel{position:absolute;color:var(--ink)}
 .s-main{inset:0 6% 64px 0;padding:20px 22px;display:flex;flex-direction:column}
@@ -484,13 +486,17 @@ footer.site .legal{grid-column:1/-1;border-top:1px solid var(--navy-line);paddin
   <div class="wrap">
     <div>
       <span class="eyebrow">Accounting software for Malaysian businesses</span>
-      <h1 id="hero-title">Simplify Your Accounting. <span>See Your Business Clearly.</span></h1>
-      <p class="lede">Manage invoices, expenses and financial reporting in one organised workspace — with every figure traceable to the document that created it.</p>
+      <h1 id="hero-title">The finance system for Malaysian companies. <span>Clear enough for anyone.</span></h1>
+      <p class="lede">Sales, purchases, bank, SST and LHDN e-Invoice in one place — every figure proved to the sen and traceable to the document behind it. Money coming in is green, money going out is amber, and every report says in plain words what it means.</p>
       <div class="ctas">
         <a class="btn btn-primary" href="login.html#register">Get Started</a>
         <a class="btn btn-line" href="#features">Explore Features</a>
       </div>
       <div class="fine"><span>MYR, SST &amp; LHDN e-Invoice ready</span><span>Double-entry, balanced to the sen</span><span>Export your data any time</span></div>
+      <ul class="caps" aria-label="What Zycount covers">
+        <li>Receivables &amp; aging</li><li>Payables &amp; bills</li><li>Bank reconciliation</li><li>Cash flow</li><li>SST-02 summary</li>
+        <li>MyInvois e-Invoice</li><li>Audit trail</li><li>Roles &amp; permissions</li><li>Multi-company</li>
+      </ul>
     </div>
 
     <div class="stack" aria-label="Preview of the Zycount workspace with demo figures">
