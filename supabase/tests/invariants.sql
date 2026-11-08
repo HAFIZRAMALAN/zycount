@@ -133,7 +133,9 @@ begin
     format('select public.create_invite(%L, %L, null)::text', ca, 'Viewer'),
     format('select public.einvoice_settings_get(%L)::text', ca),
     format('select count(*) from public.trade_open_docs(%L)', cu),
-    format('select public.void_trade_doc(%L, current_date, %L)::text', iv->>'id', 'x')] loop
+    format('select public.void_trade_doc(%L, current_date, %L)::text', iv->>'id', 'x'),
+    format('select public.sst_summary(%L, current_date, current_date)::text', ca),
+    format('select public.bank_accept_suggestions(%L)::text', st->>'id')] loop
     begin
       execute probe into t;
       raise exception 'FAIL: another company''s user ran: %', probe;
@@ -202,6 +204,14 @@ begin
     raise exception 'FAIL: idem_call ran a function outside its list';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
   checks := checks + 3;
+
+  -- SST from documents equals the output-tax account in the ledger.
+  r := public.sst_summary(ca, current_date - 1, current_date + 1);
+  if (select coalesce(sum((x->>'tax')::numeric), 0) from jsonb_array_elements(r->'by_code') x where x->>'side' = 'AR')
+     <> (select coalesce(sum((x->>'movement')::numeric), 0) from jsonb_array_elements(r->'accounts') x where x->>'role' = 'OUTPUT') then
+    raise exception 'FAIL: SST from documents differs from the output-tax account: %', r;
+  end if;
+  checks := checks + 1;
 
   -- A payment marked paid twice extends the plan once.
   perform set_config('role', 'postgres', true);

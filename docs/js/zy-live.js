@@ -568,10 +568,10 @@
     Object.assign(ICONS, EXTRA_ICONS); // app.html's icon set is defined after this file loads
     const P = ZL.isPersonal();
     const groups = [
-      { label: "", items: [["dashboard", "Dashboard", "dash"], ["capture", "Inbox", "camera"], ["transactions", P ? "Money in & out" : "Transactions", "swap"]] },
-      { label: "Sales", items: [["sales", "Sales documents", "invoice"], ["customers", "Customers", "users"], ["araging", "Receivables aging", "clock"], ["items", "Items & services", "box"]] },
-      { label: "Purchases", items: [["purchases", "Purchase documents", "truck"], ["suppliers", "Suppliers", "building"], ["apaging", "Payables aging", "clock"]] },
-      { label: "Reports", items: [["pl", P ? "Income & spending" : "Profit & loss", "chart"], ["bs", P ? "Net worth" : "Balance sheet", "sheet"], ["tb", "Trial balance", "scale"]] },
+      { label: "", items: [["dashboard", "Dashboard", "dash"], ["capture", "Inbox", "camera"], ["transactions", P ? "Money in & out" : "Transactions", "swap"], ["owed", "Money owed", "scale"]] },
+      { label: "Sales · money in", items: [["sales", "Sales documents", "invoice"], ["customers", "Customers", "users"], ["araging", "Receivables aging", "clock"], ["items", "Items & services", "box"]] },
+      { label: "Purchases · money out", items: [["purchases", "Purchase documents", "truck"], ["suppliers", "Suppliers", "building"], ["apaging", "Payables aging", "clock"]] },
+      { label: "Reports", items: [["reports", "All reports", "list"], ["pl", P ? "Income & spending" : "Profit & loss", "chart"], ["cf", "Cash flow", "wallet"], ["sst", "SST summary", "scale"], ["bs", P ? "Net worth" : "Balance sheet", "sheet"], ["tb", "Trial balance", "scale"]] },
       { label: "Accounting", items: [["coa", P ? "Accounts & categories" : "Chart of accounts", "book"], ["journals", "Journals", "list"], ["gl", "General ledger", "ledger"], ["cashbook", "Cash book", "wallet"], ["bankrec", P ? "Match bank statement" : "Bank reconciliation", "bank"], ["periods", "Fiscal periods", "calendar"]] },
       { label: P ? "Settings" : "Company", items: [["users", P ? "Sharing" : "Users & roles", "users"], ["audit", "Audit trail", "shield"], ["templates", P ? "Receipt template" : "Voucher template", "doc"], ["numbering", "Numbering", "hash"], ["taxcodes", "Tax codes (SST)", "scale"], ["billing", "Plan & billing", "wallet"], ["settings", "Settings", "gear"]] },
       { label: "Zycount", items: [["admin", "Admin console", "key"], ["adminkeys", "Keys & payments", "key"], ["adminbilling", "Subscriptions", "wallet"]] },
