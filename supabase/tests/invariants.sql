@@ -16,7 +16,7 @@ declare
   it uuid; wh2 uuid; ia uuid; ca2 uuid; q numeric; v numeric;
   it2 uuid; po jsonb; grn jsonb; grn2 jsonb; pl uuid; g1 uuid; g2 uuid; bx jsonb;
   probe text;
-  pj1 uuid; pj2 uuid; pjb uuid;
+  pj1 uuid; pj2 uuid; pjb uuid; uc uuid := gen_random_uuid(); mk jsonb;
   y int := extract(year from current_date)::int; fa1 uuid; fa2 uuid; fa3 uuid; fa4 uuid; dr jsonb; dsp jsonb; oe uuid; ce uuid;
 begin
   -- ── Two people, each with their own business books ───────────────────────
@@ -598,6 +598,118 @@ begin
     raise exception 'FAIL: another company read the P&L by project';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
   checks := checks + 2;
+
+  -- ── L. Maker-checker: money out and manual journals above the threshold need a second person ─
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.set_approval_settings(ca, true, 5000);
+    raise exception 'FAIL: approvals were turned on with only one person who can post';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  perform set_config('role', 'postgres', true);
+  insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+  values (uc, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'inv-c-' || uc || '@test.local', '{"full_name":"Checker C"}', now(), now());
+  insert into public.company_members (company_id, user_id, role) values (ca, uc, 'Accountant');
+  perform set_config('role', 'authenticated', true);
+  perform public.set_approval_settings(ca, true, 5000);
+  checks := checks + 1;
+
+  -- A purchase invoice over RM 5,000 is held; one under it posts.
+  mk := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'MC-1'),
+    jsonb_build_array(jsonb_build_object('description', 'Machine', 'qty', 1, 'unit_price', 6000, 'account_id', ex)), true);
+  if mk->>'status' <> 'PENDING' or (select status from public.trade_docs where id = (mk->>'id')::uuid) <> 'DRAFT'
+     or (select journal_entry_id from public.trade_docs where id = (mk->>'id')::uuid) is not null then
+    raise exception 'FAIL: a RM 6,000 purchase invoice was not held for approval: %', mk;
+  end if;
+  bx := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'MC-2'),
+    jsonb_build_array(jsonb_build_object('description', 'Paper', 'qty', 1, 'unit_price', 4000, 'account_id', ex)), true);
+  if bx->>'status' <> 'POSTED' then raise exception 'FAIL: a RM 4,000 purchase invoice under the threshold did not post'; end if;
+  bx := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'INVOICE', 'contact_id', cu, 'date', current_date),
+    jsonb_build_array(jsonb_build_object('description', 'Big sale', 'qty', 1, 'unit_price', 9000, 'account_id', rev)), true);
+  if bx->>'status' <> 'POSTED' then raise exception 'FAIL: a sales invoice was held — approvals are for money going out'; end if;
+  checks := checks + 3;
+
+  begin
+    perform public.save_trade_doc(ca, (mk->>'id')::uuid, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'MC-1'),
+      jsonb_build_array(jsonb_build_object('description', 'Machine', 'qty', 1, 'unit_price', 600, 'account_id', ex)), false);
+    raise exception 'FAIL: a document waiting for approval was edited';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like 'PENDING_APPROVAL:%' then raise exception 'FAIL: editing a held document refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  begin
+    perform public.approve_submission('DOC', (mk->>'id')::uuid);
+    raise exception 'FAIL: the maker approved their own purchase invoice';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like 'SAME_PERSON:%' then raise exception 'FAIL: self-approval refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  checks := checks + 2;
+
+  -- The checker approves: it posts, with its journal, and records who approved it.
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  r := public.approve_submission('DOC', (mk->>'id')::uuid);
+  if (select status from public.trade_docs where id = (mk->>'id')::uuid) <> 'POSTED'
+     or (select approved_by from public.trade_docs where id = (mk->>'id')::uuid) is distinct from uc
+     or (select journal_entry_id from public.trade_docs where id = (mk->>'id')::uuid) is null then
+    raise exception 'FAIL: approving did not post the purchase invoice: %', r;
+  end if;
+  checks := checks + 1;
+
+  -- A manual journal: held, rejected with a reason, fixed, resubmitted, withdrawn, resubmitted, approved.
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  j := public.save_journal(ca, null, current_date, 'Year-end accrual', null, jsonb_build_array(
+    jsonb_build_object('account_id', ex, 'debit', 7000, 'credit', 0), jsonb_build_object('account_id', cash, 'debit', 0, 'credit', 7000)), null);
+  r := public.post_journal((j->>'id')::uuid);
+  if r->>'status' <> 'PENDING' or (select status from public.journal_entries where id = (j->>'id')::uuid) <> 'DRAFT' then
+    raise exception 'FAIL: a RM 7,000 manual journal was not held: %', r;
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  perform public.reject_submission('JOURNAL', (j->>'id')::uuid, 'Wrong account');
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  j := public.save_journal(ca, (j->>'id')::uuid, current_date, 'Year-end accrual (fixed)', null, jsonb_build_array(
+    jsonb_build_object('account_id', ex, 'debit', 7000, 'credit', 0), jsonb_build_object('account_id', cash, 'debit', 0, 'credit', 7000)),
+    (select version from public.journal_entries where id = (j->>'id')::uuid));
+  r := public.post_journal((j->>'id')::uuid);
+  perform public.withdraw_submission('JOURNAL', (j->>'id')::uuid);
+  if (select approval_status from public.journal_entries where id = (j->>'id')::uuid) is not null then raise exception 'FAIL: withdrawing left the journal held'; end if;
+  r := public.post_journal((j->>'id')::uuid);
+  select count(*) into k from public.approval_queue(ca) q where q.id = (j->>'id')::uuid and q.approval_status = 'PENDING' and q.mine;
+  if k <> 1 then raise exception 'FAIL: the held journal is not in the approval queue'; end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  r := public.approve_submission('JOURNAL', (j->>'id')::uuid);
+  if (select status from public.journal_entries where id = (j->>'id')::uuid) <> 'POSTED' or r->>'reference' is null then
+    raise exception 'FAIL: approving the journal did not post it: %', r;
+  end if;
+  checks := checks + 3;
+
+  -- Money out from the Transactions page (a PV) is held too; a small journal is not.
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  r := public.record_transaction(ca, 'OUT', current_date, 8000, cash, ex, 'Big payout', null, 0, null, null, null, null);
+  if r->>'status' <> 'PENDING' then raise exception 'FAIL: a RM 8,000 payment voucher was not held: %', r; end if;
+  j := public.save_journal(ca, null, current_date, 'small', null, jsonb_build_array(
+    jsonb_build_object('account_id', ex, 'debit', 100, 'credit', 0), jsonb_build_object('account_id', cash, 'debit', 0, 'credit', 100)), null);
+  r := public.post_journal((j->>'id')::uuid);
+  if r->>'status' is distinct from 'POSTED' and r->>'reference' is null then raise exception 'FAIL: a RM 100 journal was held: %', r; end if;
+  checks := checks + 2;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select id into jid from public.journal_entries where company_id = ca and approval_status = 'PENDING' limit 1;
+  begin
+    perform public.approve_submission('JOURNAL', jid);
+    raise exception 'FAIL: another company approved a payment in these books';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  perform public.set_approval_settings(ca, false, 5000);
 
   -- A payment marked paid twice extends the plan once.
   perform set_config('role', 'postgres', true);
