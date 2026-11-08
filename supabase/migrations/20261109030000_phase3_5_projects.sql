@@ -535,8 +535,8 @@ begin
 end $$;
 
 /**
- * Profit and loss by project: every posted revenue and expense line in the dates (either may be null),
- * summed per project and account. Revenue is credit − debit; expenses debit − credit. Lines with no
+ * Profit and loss by project: every posted revenue, cost-of-sales and expense line in the dates (either may be null),
+ * summed per project and account. Revenue is credit − debit; costs and expenses debit − credit. Lines with no
  * project come back with project_id null ("Not in a project"), so the columns add up to the whole P&L.
  */
 create or replace function public.project_pl(p_company uuid, p_from date default null, p_to date default null, p_project uuid default null)
@@ -550,7 +550,7 @@ begin
     from public.journal_lines l
     join public.journal_entries e on e.id = l.journal_entry_id
     join public.accounts a on a.id = l.account_id
-   where e.company_id = p_company and e.status <> 'DRAFT' and a.type in ('REVENUE', 'EXPENSE')
+   where e.company_id = p_company and e.status <> 'DRAFT' and a.type in ('REVENUE', 'COST_OF_SALES', 'EXPENSE')
      and (p_from is null or e.date >= p_from) and (p_to is null or e.date <= p_to)
      and (p_project is null or l.project_id = p_project)
    group by l.project_id, a.id, a.code, a.name, a.type, a.sub_type

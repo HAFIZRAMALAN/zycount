@@ -555,9 +555,9 @@ begin
   select coalesce(sum(p2.amount), 0) into n from public.project_pl(ca, current_date, current_date, pj2) p2 where p2.type = 'EXPENSE';
   if n <> 300 then raise exception 'FAIL: Beta should show 300 of expenses, shows %', n; end if;
   select coalesce(sum(case when p2.type = 'REVENUE' then p2.amount else -p2.amount end), 0) into n from public.project_pl(ca) p2;
-  select coalesce(sum(case when a.type = 'REVENUE' then l.credit - l.debit else l.debit - l.credit end), 0) into v
+  select coalesce(sum(l.credit - l.debit), 0) into v
     from public.journal_lines l join public.journal_entries e on e.id = l.journal_entry_id join public.accounts a on a.id = l.account_id
-   where e.company_id = ca and e.status <> 'DRAFT' and a.type in ('REVENUE', 'EXPENSE');
+   where e.company_id = ca and e.status <> 'DRAFT' and a.type in ('REVENUE', 'COST_OF_SALES', 'EXPENSE');
   if n <> v then raise exception 'FAIL: the project columns add up to % but the P&L is %', n, v; end if;
   checks := checks + 5;
 
