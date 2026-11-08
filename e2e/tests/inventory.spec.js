@@ -5,6 +5,8 @@ const { useLocalSupabase, unique, strongPassword } = require("./env");
 
 const modal = (page) => page.locator(".zl-modal").last();
 const primary = (page) => modal(page).locator("footer .zl-btn.primary");
+// Screens kept for review (CI uploads e2e/screens as an artifact on every run).
+const shot = (page, name) => page.screenshot({ path: `screens/${name}.png`, fullPage: true });
 
 test("stock item: opening stock, sale, average cost and COGS", async ({ page }) => {
   const errors = await useLocalSupabase(page);
@@ -28,6 +30,7 @@ test("stock item: opening stock, sale, average cost and COGS", async ({ page }) 
   await modal(page).locator('[name="buy_price"]').fill("10");
   await modal(page).locator('[name="track_stock"]').check();
   await expect(modal(page).locator('[name="inventory_account_id"]')).toBeVisible();
+  await shot(page, "1-item-form-track-stock");
   await primary(page).click();
   await expect(page.locator(".zl-modal")).toHaveCount(0);
 
@@ -43,11 +46,13 @@ test("stock item: opening stock, sale, average cost and COGS", async ({ page }) 
   await rows.nth(1).locator('[data-f="item"]').selectOption(wid);
   await rows.nth(1).locator('[data-f="qty"]').fill("10");
   await rows.nth(1).locator('[data-f="cost"]').fill("12");
+  await shot(page, "2-opening-stock");
   await primary(page).click();
   await expect(page.locator(".zl-modal")).toHaveCount(0);
   const row = page.locator("tr[data-card]", { hasText: "WID-1" });
   await expect(row).toContainText("20");
   await expect(row).toContainText("220.00");
+  await shot(page, "3-stock-on-hand-after-opening");
 
   // ── Sell 4 on an invoice ─────────────────────────────────────────────────
   await page.evaluate(() => ZL.rpc("save_contact", { p_company: ZL.company.company_id, p_id: null, p_data: { kind: "CUSTOMER", name: "Kedai Stok" } }));
@@ -61,6 +66,7 @@ test("stock item: opening stock, sale, average cost and COGS", async ({ page }) 
   await item.selectOption(await item.locator("option", { hasText: "WID-1" }).getAttribute("value"));
   await line.locator('[data-f="qty"]').fill("4");
   await contact.focus();
+  await shot(page, "4-invoice-with-stock-item");
   await primary(page).click();
   await expect(page.locator(".zl-modal")).toHaveCount(0);
   await expect(page.locator("button[data-pay]")).toBeVisible();
@@ -70,6 +76,7 @@ test("stock item: opening stock, sale, average cost and COGS", async ({ page }) 
   await expect(row).toContainText("16");
   await expect(row).toContainText("176.00");
   await expect(page.getByText("Stock value agrees with the inventory account")).toBeVisible();
+  await shot(page, "5-stock-on-hand-after-sale");
   const cogs = await page.evaluate(async () => {
     const [acc] = await ZL.select("accounts", "id", (q) => q.eq("company_id", ZL.company.company_id).eq("code", "5100"));
     const lines = await ZL.select("journal_lines", "debit,credit,journal_entries!inner(company_id,status)",
@@ -82,6 +89,13 @@ test("stock item: opening stock, sale, average cost and COGS", async ({ page }) 
   await row.click();
   await expect(page.locator("td", { hasText: /^Opening stock$/ })).toHaveCount(2);
   await expect(page.locator("td", { hasText: /^Sale$/ })).toHaveCount(1);
+  await shot(page, "6-stock-card");
+  await page.goto("/app.html#stockdocs");
+  await expect(page.getByText("Opening stock").first()).toBeVisible();
+  await shot(page, "7-stock-adjustments");
+  await page.goto("/app.html#warehouses");
+  await expect(page.getByText("Main store")).toBeVisible();
+  await shot(page, "8-warehouses");
 
   expect(errors, `uncaught errors in the app: ${errors.join(" | ")}`).toEqual([]);
 });
