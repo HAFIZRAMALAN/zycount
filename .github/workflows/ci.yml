@@ -102,9 +102,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned: "latest" now resolves to the v3 major release, and an unpinned
+      # lookup fails outright whenever GitHub's release API has a bad minute.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.122.1
 
       - name: Start a local database and apply every migration
         run: |
