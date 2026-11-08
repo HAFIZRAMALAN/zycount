@@ -18,6 +18,13 @@ on:
   schedule:
     - cron: "0 19 * * *"   # 03:00 Malaysia time, every day
   workflow_dispatch:
+  # Also when the backup scripts change on main, so a change is proved against
+  # the live books straight away (and the first backup runs on merge).
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/backup.yml"
+      - "supabase/backup/**"
 
 permissions:
   contents: read
