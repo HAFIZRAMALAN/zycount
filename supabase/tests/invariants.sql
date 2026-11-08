@@ -16,6 +16,7 @@ declare
   it uuid; wh2 uuid; ia uuid; ca2 uuid; q numeric; v numeric;
   it2 uuid; po jsonb; grn jsonb; grn2 jsonb; pl uuid; g1 uuid; g2 uuid; bx jsonb;
   probe text;
+  y int := extract(year from current_date)::int; fa1 uuid; fa2 uuid; fa3 uuid; fa4 uuid; dr jsonb; dsp jsonb; oe uuid; ce uuid;
 begin
   -- ── Two people, each with their own business books ───────────────────────
   insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
@@ -392,6 +393,133 @@ begin
   select count(*) into k from public.stock_moves where company_id = ca;
   if k <> 0 then raise exception 'FAIL: another company can see % stock movements', k; end if;
   checks := checks + 2;
+
+  -- ── J. Fixed assets (3.4): register, monthly depreciation, disposal, register = ledger ─
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select id into oe from public.accounts where company_id = ca and code = '1540';
+  select id into ce from public.accounts where company_id = ca and code = '1560';
+  r := public.register_asset(ca, jsonb_build_object('name', 'Photocopier', 'cost_account_id', oe, 'acquired_on', make_date(y, 2, 15),
+    'cost', 12000, 'method', 'SL', 'life_months', 60, 'post_acquisition', true, 'paid_from_account_id', cash));
+  fa1 := (r->>'id')::uuid;
+  if (select accum_account_id from public.fixed_assets where id = fa1) <> (select id from public.accounts where company_id = ca and code = '1545')
+     or (select expense_account_id from public.fixed_assets where id = fa1) <> (select id from public.accounts where company_id = ca and code = '6540') then
+    raise exception 'FAIL: 1540 did not default to 1545 accumulated and 6540 depreciation';
+  end if;
+  fa2 := (public.register_asset(ca, jsonb_build_object('name', 'Printer', 'cost_account_id', oe, 'acquired_on', make_date(y, 2, 3),
+    'cost', 1000, 'method', 'RB', 'rb_rate', 12, 'post_acquisition', true, 'paid_from_account_id', cash))->>'id')::uuid;
+  fa3 := (public.register_asset(ca, jsonb_build_object('name', 'Shredder', 'cost_account_id', oe, 'acquired_on', make_date(y, 2, 28),
+    'cost', 100, 'method', 'SL', 'life_months', 3, 'post_acquisition', true, 'paid_from_account_id', cash))->>'id')::uuid;
+  checks := checks + 1;
+
+  begin
+    perform public.register_asset(ca, jsonb_build_object('name', 'Bad', 'cost_account_id', oe, 'acquired_on', current_date,
+      'cost', 100, 'residual', 100, 'method', 'SL', 'life_months', 12));
+    raise exception 'FAIL: an asset with residual value equal to its cost was registered';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+
+  -- Straight-line 12,000 / 60 = 200 a month from February (January is closed above); reducing balance 12% a year on 1,000 = 10.00, 9.90, 9.80;
+  -- 100 over 3 months = 33.33, 33.33, 33.34 (the last month takes what is left).
+  r := public.depreciation_preview(ca, make_date(y, 4, 30));
+  select sum((e->>'amount')::numeric) into n from jsonb_array_elements(r) e;
+  if n <> 729.70 then raise exception 'FAIL: depreciation to April previews % instead of 729.70: %', n, r; end if;
+  dr := public.run_depreciation(ca, make_date(y, 4, 10));
+  if (dr->>'total')::numeric <> 729.70 or (dr->>'period_end')::date <> make_date(y, 4, 30) then raise exception 'FAIL: depreciation run gave %', dr; end if;
+  if (select accumulated from public.fixed_assets where id = fa1) <> 600 or (select accumulated from public.fixed_assets where id = fa2) <> 29.70
+     or (select accumulated from public.fixed_assets where id = fa3) <> 100 then
+    raise exception 'FAIL: accumulated depreciation after the April run is wrong';
+  end if;
+  select sum(l.debit) - sum(l.credit) into n from public.journal_lines l where l.journal_entry_id = (dr->>'journal_id')::uuid;
+  if n <> 0 or (select status from public.journal_entries where id = (dr->>'journal_id')::uuid) <> 'POSTED' then
+    raise exception 'FAIL: the depreciation journal is not a balanced posted journal';
+  end if;
+  r := public.fixed_asset_gl_check(ca);
+  if not (r->>'in_balance')::boolean then raise exception 'FAIL: register and ledger disagree after depreciation: %', r; end if;
+  checks := checks + 4;
+
+  begin
+    perform public.run_depreciation(ca, make_date(y, 4, 30));
+    raise exception 'FAIL: April was depreciated twice';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  begin
+    perform public.run_depreciation(ca, make_date(y, 3, 31));
+    raise exception 'FAIL: March was depreciated again after April';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 2;
+
+  -- Void the run: everything steps back; running again gives the same.
+  perform public.void_depreciation_run((dr->>'id')::uuid, 'test');
+  if (select sum(accumulated) from public.fixed_assets where company_id = ca) <> 0
+     or exists (select 1 from public.fixed_assets where company_id = ca and depreciated_to is not null) then
+    raise exception 'FAIL: voiding the run did not put the assets back';
+  end if;
+  if not (public.fixed_asset_gl_check(ca)->>'in_balance')::boolean then raise exception 'FAIL: register and ledger disagree after a void'; end if;
+  dr := public.run_depreciation(ca, make_date(y, 4, 30));
+  if (dr->>'total')::numeric <> 729.70 then raise exception 'FAIL: running April again gave %', dr->>'total'; end if;
+  checks := checks + 2;
+
+  -- Disposal in May for 11,000: May's 200 first (800 in all), book value 11,200, so a loss of 200.
+  dsp := public.dispose_asset(fa1, jsonb_build_object('date', make_date(y, 5, 10), 'proceeds', 11000, 'money_account_id', cash, 'reason', 'sold'));
+  if (dsp->>'gain')::numeric <> -200 or (dsp->>'depreciation')::numeric <> 200 then raise exception 'FAIL: disposal gave %', dsp; end if;
+  select sum(l.debit) into n from public.journal_lines l join public.accounts a on a.id = l.account_id
+   where l.journal_entry_id = (dsp->>'journal_id')::uuid and a.code = '6720';
+  if n is distinct from 200.00 then raise exception 'FAIL: the loss on disposal posted % to 6720', n; end if;
+  if not (public.fixed_asset_gl_check(ca)->>'in_balance')::boolean then raise exception 'FAIL: register and ledger disagree after a disposal'; end if;
+  select coalesce(sum(l.debit - l.credit), 0) into n from public.journal_lines l join public.journal_entries e on e.id = l.journal_entry_id
+   where e.company_id = ca and e.status <> 'DRAFT' and l.account_id = oe;
+  if n <> 1100 then raise exception 'FAIL: 1540 should hold 1,100 (printer and shredder) after the sale, holds %', n; end if;
+  checks := checks + 3;
+
+  begin
+    perform public.void_depreciation_run((dr->>'id')::uuid, 'test');
+    raise exception 'FAIL: voided a depreciation run for an asset since disposed of';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+
+  perform public.undo_asset_disposal(fa1, 'wrong price');
+  if (select accumulated from public.fixed_assets where id = fa1) <> 600 or (select status from public.fixed_assets where id = fa1) <> 'ACTIVE'
+     or (select depreciated_to from public.fixed_assets where id = fa1) <> make_date(y, 4, 30) then
+    raise exception 'FAIL: undoing the disposal did not put the asset back to April';
+  end if;
+  dsp := public.dispose_asset(fa1, jsonb_build_object('date', make_date(y, 5, 10), 'proceeds', 12000, 'money_account_id', cash));
+  select sum(l.credit) into n from public.journal_lines l join public.accounts a on a.id = l.account_id
+   where l.journal_entry_id = (dsp->>'journal_id')::uuid and a.code = '4530';
+  if (dsp->>'gain')::numeric <> 800 or n is distinct from 800.00 then raise exception 'FAIL: sale above book value gave %, 4530 credit %', dsp, n; end if;
+  if not (public.fixed_asset_gl_check(ca)->>'in_balance')::boolean then raise exception 'FAIL: register and ledger disagree after a gain'; end if;
+  checks := checks + 2;
+
+  -- From a posted purchase invoice: no new journal, the cost is the invoice line, 1560 defaults to 1565 / 6560.
+  bx := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'FA-B1'),
+    jsonb_build_array(jsonb_build_object('description', 'Laptop', 'qty', 1, 'unit_price', 3000, 'account_id', ce)), true);
+  select l.id into pl from public.trade_doc_lines l where l.doc_id = (bx->>'id')::uuid;
+  if not exists (select 1 from public.asset_candidates(ca) c where c.line_id = pl) then raise exception 'FAIL: the laptop bill line is not offered as an asset'; end if;
+  if (public.fixed_asset_gl_check(ca)->>'in_balance')::boolean then raise exception 'FAIL: an unregistered asset purchase did not show as a difference'; end if;
+  fa4 := (public.register_asset(ca, jsonb_build_object('source_line_id', pl, 'method', 'SL', 'life_months', 36, 'cost', 1))->>'id')::uuid;
+  if (select cost from public.fixed_assets where id = fa4) <> 3000 or (select acquisition_journal_id from public.fixed_assets where id = fa4) is not null
+     or (select name from public.fixed_assets where id = fa4) <> 'Laptop' then
+    raise exception 'FAIL: an asset from an invoice line did not take its cost and name, or posted a journal';
+  end if;
+  if not (public.fixed_asset_gl_check(ca)->>'in_balance')::boolean then raise exception 'FAIL: register and ledger disagree after registering from a bill'; end if;
+  begin
+    perform public.register_asset(ca, jsonb_build_object('source_line_id', pl, 'method', 'SL', 'life_months', 36));
+    raise exception 'FAIL: the same bill line was registered twice';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 4;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.run_depreciation(ca, make_date(y, 12, 31));
+    raise exception 'FAIL: another company ran depreciation on these books';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  begin
+    perform public.dispose_asset(fa2, jsonb_build_object('date', current_date, 'proceeds', 0));
+    raise exception 'FAIL: another company disposed of an asset in these books';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  select count(*) into k from public.fixed_assets where company_id = ca;
+  if k <> 0 then raise exception 'FAIL: another company can see % fixed assets', k; end if;
+  checks := checks + 3;
 
   -- A payment marked paid twice extends the plan once.
   perform set_config('role', 'postgres', true);
