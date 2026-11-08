@@ -50,7 +50,7 @@ test("maker-checker: held purchase invoice approved by a second person", async (
       p_lines: [{ description: "Machine service", qty: 1, unit_price: 6000, account_id: ex.id }], p_post: true });
   });
   expect(held.status).toBe("PENDING");
-  await maker.goto("/app.html#approvals");
+  await maker.evaluate(() => ZL.refresh());                                   // same route: render it again
   await expect(maker.getByText("Waiting (1)")).toBeVisible();
   await expect(maker.locator("[data-open]")).toContainText("(you)");
   await expect(maker.locator('[data-apr="approve"]')).toHaveCount(0);           // the maker can't approve
@@ -62,8 +62,9 @@ test("maker-checker: held purchase invoice approved by a second person", async (
   // ── The checker opens the maker's books and approves it ──────────────────
   await checker.evaluate((c) => { localStorage.setItem("zl.company", c); }, company);
   await checker.goto("/app.html#approvals");
+  await checker.reload();                                                     // load the books it now belongs to
   await checker.waitForFunction((c) => window.ZL && ZL.company && ZL.company.company_id === c, company);
-  await checker.goto("/app.html#approvals");
+  await checker.evaluate(() => ZL.refresh());
   await expect(checker.getByText("Waiting (1)")).toBeVisible();
   await shot(checker, "m3-checker-queue");
   await checker.locator('[data-apr="approve"]').first().click();

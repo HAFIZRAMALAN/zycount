@@ -151,13 +151,13 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_l public.bank_lines; v_st record; v_r jsonb;
 begin
   v_l := public._bank_line_for_update(p_line, 'journal.post');
-  -- Recorded from a bank statement: the money has already moved, so it is not held for approval.
-  perform set_config('zycount.no_approval', 'on', true);
   if v_l.status <> 'UNMATCHED' then raise exception 'INVALID_STATE: Only unmatched bank lines can be recorded.'; end if;
   select * into v_st from public.bank_statements where id = v_l.statement_id;
+  perform set_config('zycount.no_approval', 'on', true);   -- from the bank statement: the money has already moved
   v_r := public.record_transaction(v_l.company_id, case when v_l.amount > 0 then 'IN' else 'OUT' end, v_l.date, abs(v_l.amount),
                                    v_st.account_id, p_other_account, coalesce(nullif(btrim(p_description), ''), v_l.description),
                                    v_l.reference, p_tax_rate, p_party, 'Bank transfer', p_series, p_doc_no);
+  perform set_config('zycount.no_approval', '', true);
   update public.bank_lines set status = 'MATCHED', entry_id = (v_r->>'id')::uuid, match_method = 'CREATED', updated_at = now() where id = p_line;
   return v_r;
 end $$;
@@ -172,8 +172,6 @@ begin
   if not found then raise exception 'NOT_FOUND: Statement not found.'; end if;
   perform public._require_perm(v_st.company_id, 'journal.create');
   perform public._require_perm(v_st.company_id, 'journal.post');
-  -- Recorded from a bank statement: the money has already moved, so it is not held for approval.
-  perform set_config('zycount.no_approval', 'on', true);
   if p_items is null or jsonb_typeof(p_items) <> 'array' then raise exception 'VALIDATION: Nothing to record.'; end if;
   if jsonb_array_length(p_items) > 2000 then raise exception 'VALIDATION: Record at most 2,000 lines at a time.'; end if;
 
@@ -198,11 +196,15 @@ begin
           null);
         v_id := (v_saved->>'id')::uuid;
         update public.journal_entries set source = 'BANK', txn_kind = 'TRANSFER' where id = v_id;
+        perform set_config('zycount.no_approval', 'on', true);   -- from the bank statement: the money has already moved
         perform public.post_journal(v_id);
+        perform set_config('zycount.no_approval', '', true);
       else
         v_kind := case when v_l.amount > 0 then 'IN' else 'OUT' end;
+        perform set_config('zycount.no_approval', 'on', true);   -- from the bank statement: the money has already moved
         v_r := public.record_transaction(v_st.company_id, v_kind, v_l.date, abs(v_l.amount), v_st.account_id, v_acc.id,
                                          v_desc, v_l.reference, 0, null, 'Bank transfer');
+        perform set_config('zycount.no_approval', '', true);
         v_id := (v_r->>'id')::uuid;
       end if;
       update public.bank_lines set status = 'MATCHED', entry_id = v_id, match_method = 'CREATED', updated_at = now() where id = v_l.id;
@@ -235,8 +237,6 @@ declare v_l public.bank_lines; v_st record; v_c public.contacts; v_in boolean; v
         v_total numeric; v_r jsonb; v_je uuid; v_applied numeric := 0; v_item jsonb;
 begin
   v_l := public._bank_line_for_update(p_line, 'journal.post');
-  -- Recorded from a bank statement: the money has already moved, so it is not held for approval.
-  perform set_config('zycount.no_approval', 'on', true);
   if v_l.status <> 'UNMATCHED' then raise exception 'INVALID_STATE: This bank line is already %.', lower(v_l.status); end if;
   v_in := v_l.amount > 0;
   select * into v_st from public.bank_statements where id = v_l.statement_id;
@@ -261,12 +261,14 @@ begin
       to_char(v_total, 'FM999,999,999,990.00'), case when v_in then 'received' else 'paid' end;
   end if;
 
+  perform set_config('zycount.no_approval', 'on', true);   -- from the bank statement: the money has already moved
   v_r := public.save_trade_doc(v_l.company_id, null,
     jsonb_build_object('doc_type', case when v_in then 'RECEIPT' else 'PAYMENT' end, 'contact_id', p_contact, 'date', v_l.date,
       'amount', v_total, 'bank_charge', v_charge, 'money_account_id', v_st.account_id, 'pay_method', 'Bank transfer',
       'reference', left(v_l.reference, 60),
       'description', left(coalesce(nullif(btrim(p_description), ''), v_l.description), 500)),
     '[]'::jsonb, true, p_series, p_doc_no, coalesce(p_allocations, '[]'::jsonb));
+  perform set_config('zycount.no_approval', '', true);
   select journal_entry_id into v_je from public.trade_docs where id = (v_r->>'id')::uuid;
   update public.bank_lines set status = 'MATCHED', entry_id = v_je, match_method = 'CREATED', note = null, updated_at = now()
   where id = p_line;
