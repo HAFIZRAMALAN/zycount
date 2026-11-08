@@ -8,7 +8,7 @@
 -- numbering the maker chose — the company's own series (PV/PI/JV…) or a number typed by hand. Someone
 -- else with posting rights approves it, which posts it with that number (the checker may change it), or
 -- rejects it with a reason, which unlocks the draft. Nobody approves their own submission.
--- Recording from a bank statement is not held: the money has already left, and the line is matched at once.
+-- Recording or settling from a bank statement is not held: the money has already moved, and the line is matched at once.
 -- NB: from here on the trade-document posting body is _post_trade_doc_core; _post_trade_doc is the gate.
 
 alter table public.companies
@@ -96,7 +96,8 @@ begin
   if not found then raise exception 'NOT_FOUND: Document not found.'; end if;
   if v.status = 'DRAFT' and v.doc_type in ('BILL', 'CASH_PURCHASE', 'SUPPLIER_DN', 'PAYMENT')
      and public._needs_approval(v.company_id, v.total)
-     and coalesce(current_setting('zycount.approving', true), '') <> p_id::text then
+     and coalesce(current_setting('zycount.approving', true), '') <> p_id::text
+     and coalesce(current_setting('zycount.no_approval', true), '') <> 'on' then
     perform public._require_perm(v.company_id, 'journal.create');
     if v.total <= 0 then raise exception 'VALIDATION: The total must be more than zero.'; end if;
     update public.trade_docs set approval_status = 'PENDING', submitted_by = auth.uid(), submitted_at = now(),
@@ -224,6 +225,52 @@ begin
     format('Recorded %s lines from statement %s%s', v_done, v_st.name,
            case when jsonb_array_length(v_errors) > 0 then format(' (%s not recorded)', jsonb_array_length(v_errors)) else '' end));
   return jsonb_build_object('recorded', v_done, 'errors', v_errors);
+end $$;
+
+create or replace function public.settle_from_bank_line(p_line uuid, p_contact uuid, p_allocations jsonb default '[]'::jsonb,
+                                                        p_bank_charge numeric default 0, p_series uuid default null,
+                                                        p_doc_no text default null, p_description text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_l public.bank_lines; v_st record; v_c public.contacts; v_in boolean; v_charge numeric := round(coalesce(p_bank_charge, 0), 2);
+        v_total numeric; v_r jsonb; v_je uuid; v_applied numeric := 0; v_item jsonb;
+begin
+  v_l := public._bank_line_for_update(p_line, 'journal.post');
+  -- Recorded from a bank statement: the money has already moved, so it is not held for approval.
+  perform set_config('zycount.no_approval', 'on', true);
+  if v_l.status <> 'UNMATCHED' then raise exception 'INVALID_STATE: This bank line is already %.', lower(v_l.status); end if;
+  v_in := v_l.amount > 0;
+  select * into v_st from public.bank_statements where id = v_l.statement_id;
+  select * into v_c from public.contacts where id = p_contact and company_id = v_l.company_id;
+  if not found or v_c.kind <> (case when v_in then 'CUSTOMER' else 'SUPPLIER' end) then
+    raise exception 'VALIDATION: %', case when v_in then 'Choose the customer who paid this.' else 'Choose the supplier this was paid to.' end;
+  end if;
+  if v_charge < 0 then raise exception 'VALIDATION: Bank charges cannot be negative.'; end if;
+  -- The bank shows what actually moved: a customer's payment arrives net of charges,
+  -- a supplier payment leaves with the charges on top.
+  v_total := case when v_in then abs(v_l.amount) + v_charge else abs(v_l.amount) - v_charge end;
+  if v_total <= 0 then raise exception 'VALIDATION: Bank charges must be less than the amount.'; end if;
+
+  if p_allocations is not null and jsonb_typeof(p_allocations) = 'array' then
+    for v_item in select * from jsonb_array_elements(p_allocations) loop
+      begin v_applied := v_applied + coalesce(round((v_item->>'amount')::numeric, 2), 0);
+      exception when others then raise exception 'VALIDATION: Check the knock-off amounts.'; end;
+    end loop;
+  end if;
+  if v_applied > v_total then
+    raise exception 'VALIDATION: You are knocking off % but only % was %.', to_char(v_applied, 'FM999,999,999,990.00'),
+      to_char(v_total, 'FM999,999,999,990.00'), case when v_in then 'received' else 'paid' end;
+  end if;
+
+  v_r := public.save_trade_doc(v_l.company_id, null,
+    jsonb_build_object('doc_type', case when v_in then 'RECEIPT' else 'PAYMENT' end, 'contact_id', p_contact, 'date', v_l.date,
+      'amount', v_total, 'bank_charge', v_charge, 'money_account_id', v_st.account_id, 'pay_method', 'Bank transfer',
+      'reference', left(v_l.reference, 60),
+      'description', left(coalesce(nullif(btrim(p_description), ''), v_l.description), 500)),
+    '[]'::jsonb, true, p_series, p_doc_no, coalesce(p_allocations, '[]'::jsonb));
+  select journal_entry_id into v_je from public.trade_docs where id = (v_r->>'id')::uuid;
+  update public.bank_lines set status = 'MATCHED', entry_id = v_je, match_method = 'CREATED', note = null, updated_at = now()
+  where id = p_line;
+  return v_r || jsonb_build_object('applied', v_applied, 'advance', v_total - v_applied, 'contact', v_c.name);
 end $$;
 
 -- ─── Approve, reject, withdraw ──────────────────────────────────────────────
