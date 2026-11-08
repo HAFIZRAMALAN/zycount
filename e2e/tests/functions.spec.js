@@ -13,7 +13,9 @@ test.describe("signup", () => {
   test("answers CORS preflight for the app's origin", async ({ request }) => {
     const r = await request.fetch(fn("signup"), { method: "OPTIONS", headers: { Origin: "http://localhost:8767" } });
     expect(r.ok()).toBeTruthy();
-    expect(r.headers()["access-control-allow-origin"]).toBe("http://localhost:8767");
+    // Locally the API gateway answers preflight itself with "*"; the hosted
+    // function echoes the allowed origin. Either lets the app call it.
+    expect(["http://localhost:8767", "*"]).toContain(r.headers()["access-control-allow-origin"]);
   });
 
   test("refuses bad input without creating anything", async ({ request }) => {

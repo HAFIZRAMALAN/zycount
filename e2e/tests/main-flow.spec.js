@@ -85,7 +85,8 @@ test("a new business keeps its books end to end", async ({ page }) => {
   await page.goto("/app.html#tb");
   await expect(page.getByText(money(1234.56)).first()).toBeVisible();   // cash received in total
   await page.goto("/app.html#pl");
-  await expect(page.getByText(money(1000)).first()).toBeVisible();      // the invoice is income
+  // Invoice 1,000.00 + money in 234.56, both income (the first category is Sales).
+  await expect(page.getByText(`RM ${money(1234.56)}`).first()).toBeVisible();
 
   // ── Sign out, sign back in ───────────────────────────────────────────────
   await page.goto("/app.html#dashboard");
