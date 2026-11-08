@@ -24,10 +24,13 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://qkrikvmkoelusyjjqdkd.supabase.co";
+  // window.ZY_ENV points a copy served from localhost at a local Supabase
+  // (the end-to-end tests in e2e/). It is ignored on any other host.
+  const LOCAL_ENV = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && window.ZY_ENV ? window.ZY_ENV : null;
+  const SUPABASE_URL = (LOCAL_ENV && LOCAL_ENV.url) || "https://qkrikvmkoelusyjjqdkd.supabase.co";
   // Publishable key: safe in the browser. Every table is protected by RLS and
   // every write goes through a permission-checked database function.
-  const SUPABASE_KEY = "sb_publishable_BoPf8kDj05jPr9__E2hcHQ_p0RH1Hm8";
+  const SUPABASE_KEY = (LOCAL_ENV && LOCAL_ENV.key) || "sb_publishable_BoPf8kDj05jPr9__E2hcHQ_p0RH1Hm8";
   const SESSION_KEY = "zycount.session";
   const COMPANY_KEY = "zl.company";
   const PARAMS_KEY = "zl.params";

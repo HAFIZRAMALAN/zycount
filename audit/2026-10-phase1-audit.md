@@ -47,10 +47,10 @@ No Critical defects were found.
 | M2 [monorepo] | **Recovery codes could be spent twice.** The used code was removed with a read-modify-write, so two simultaneous requests with the same code both succeeded. | same file, `verifyMfa` | Fixed — unverified. Conditional `updateMany` on the unchanged list; the losing request is refused. No regression test yet: the harness has no MFA-enrolled user (gap G3). |
 | M3 [live] | **API roles held write privileges on every table.** `anon` and `authenticated` kept Supabase's default INSERT/UPDATE/DELETE/**TRUNCATE**/TRIGGER/REFERENCES on all 30 public tables. Row-level security blocked the row writes (verified), but TRUNCATE is not subject to row-level security. PostgREST does not expose TRUNCATE today, but one exposure path would empty the books. | `has_table_privilege('authenticated','public.journal_lines','TRUNCATE')` returned `true` | Fixed. Migration `20261024082748_hardening.sql` revokes those privileges (profiles keeps its `full_name` column grant) and changes default privileges so future tables start without them. Verified: app paths still work as `authenticated`; TRUNCATE and direct INSERT are refused. |
 | M4 [live] | **Migration history drift.** The repository's migration files were numbered `…000100`–`…002100`, while the database recorded each one under the timestamp it was applied with. `supabase db push` or `migration list` would have seen 21 unapplied migrations and tried to re-run them. | `supabase/migrations/*` vs `supabase_migrations.schema_migrations` | Fixed. Files renamed to their applied versions; names and order unchanged. |
-| M5 [live] | **No automated tests for the live backend.** CI tested only the monorepo. Nothing checked that the live migrations apply cleanly, that the ledger stays balanced, or that one company cannot reach another. | `.github/workflows/ci.yml` | Fixed — unverified in CI. New `supabase` job: every migration on a fresh local Supabase, then `supabase/tests/invariants.sql` (36 checks). **The same suite passed against the hosted database** in a rolled-back transaction. |
+| M5 [live] | **No automated tests for the live backend.** CI tested only the monorepo. Nothing checked that the live migrations apply cleanly, that the ledger stays balanced, or that one company cannot reach another. | `.github/workflows/ci.yml` | Fixed — unverified in CI. New `supabase` job: every migration on a fresh local Supabase, then `supabase/tests/invariants.sql` (36 checks at the time; 55 on 8 Nov 2026). **The same suite passed against the hosted database** in a rolled-back transaction. |
 | M6 [live] | **No idempotency on money-moving calls.** `record_transaction`, `save_trade_doc(p_post)`, `record_cash_entry` and `post_contra` have no idempotency key. A double submit (two tabs, or a retry after a timeout) creates two entries. Partial guards exist: a supplier invoice reference cannot be recorded twice, a bank line settles once, and every call is one transaction, so partial failure leaves nothing behind. | functions listed | **Fixed (8 Nov 2026).** Migration `20261108084657_keys_billing_idempotency.sql`: `idem_call(request_id, fn, args)` stores the first result per user and request id; the browser reuses the id until it gets an answer. Covered by `invariants.sql`. |
-| M7 [live] | **Leaked-password protection is off** in Supabase Auth. | Supabase security advisor `auth_leaked_password_protection` | Open — a dashboard switch for the owner (§4, R1). |
-| M8 [live] | **No backup or restore procedure.** The project is on the free plan: no point-in-time recovery, and no documented export. | project settings | Open (§4, R2). |
+| M7 [live] | **Leaked-password protection is off** in Supabase Auth. | Supabase security advisor `auth_leaked_password_protection` | **Fixed without a paid plan (8 Nov 2026).** Supabase's switch needs the Pro plan, so Zycount checks HaveIBeenPwned itself (k-anonymity: only 5 hex characters of the SHA-1 leave): in the `signup` function (v6, server-side) and in the browser on password reset and change (`docs/js/zy-pwned.js`). Tested live: `password1` is refused. The advisor still shows the switch as off. |
+| M8 [live] | **No backup or restore procedure.** The project is on the free plan: no point-in-time recovery, and no documented export. | project settings | **Fixed — pending the owner's secret (8 Nov 2026).** `backup.yml`: daily dump → restore into a fresh database → `verify.sql` + exact row counts → encrypted to an offline key → kept 90 days. The same drill runs in CI on every PR (first run: 407 rows across 40 tables restored, 0 differences, ledger balanced). Starts once `SUPABASE_DB_URL` is added (`supabase/backup/README.md`). |
 | M9 [monorepo] | **TOTP secrets are stored in clear text** (`User.mfaSecret`). A database leak exposes every second factor. | `apps/api/src/modules/auth/auth.service.ts` `mfa/enrol` | Open — encrypt at rest before the monorepo is deployed. |
 | M10 [monorepo] | **Access tokens carry permissions and company list for 15 minutes.** Removing a role or company access takes effect only when the token expires. (The live product checks membership on every call, so revocation there is immediate.) | `token.service.ts` `signAccessToken`; claims built in `completeLogin` | Open — re-check membership on company-scoped routes, or revoke sessions on role change. |
 | M11 [both] | **README misdescribed the product,** which led the external evaluation to report Phase 2 as missing. | `README.md` | Fixed — new "What is live today" section. |
@@ -59,7 +59,7 @@ No Critical defects were found.
 
 | ID | Finding | Status |
 |---|---|---|
-| L1 [live] | `save_journal` silently rounds sub-cent amounts (0.005 → 0.01) instead of refusing them. Both sides round the same way, so the books stay balanced. | Open |
+| L1 [live] | `save_journal` silently rounds sub-cent amounts (0.005 → 0.01) instead of refusing them. Both sides round the same way, so the books stay balanced. | **Fixed (8 Nov 2026).** Migration `20261108105755_refuse_sub_cent.sql`: refused with "at most 2 decimal places"; covered by `invariants.sql`. |
 | L2 [live] | `signup` answers 409 for an existing email, which reveals that an address is registered. This is a deliberate trade-off for UX. | Open — accept, or return one generic answer once email confirmation is on |
 | L3 [monorepo] | The test named *rotates the refresh token and refuses a replayed one* never presented a replayed token. | Fixed — split into a real rotation test and a real replay test |
 | L4 [live] | Supabase advisor lists 87 SECURITY DEFINER functions executable by `authenticated`. This is by design: each one checks the caller's permission (`_require_perm`). Sampled 9 of them cross-tenant; all refused. | Accepted |
@@ -92,14 +92,14 @@ Every row below was **executed** against the hosted database inside a rolled-bac
 
 | # | Action | Owner | Acceptance criteria |
 |---|---|---|---|
-| R1 | Turn on leaked-password protection | Owner (Supabase → Auth → Providers → Email) | Advisor `auth_leaked_password_protection` clears |
-| R2 | Backups: upgrade to a plan with daily backups/PITR, **or** run a scheduled `pg_dump` to private storage; restore once into a scratch project | Owner + engineering | A restore drill is documented, with its date and row counts |
+| R1 | Turn on leaked-password protection — **done for free (8 Nov): own HaveIBeenPwned check, see M7** | Owner (Supabase → Auth → Providers → Email) | Advisor `auth_leaked_password_protection` clears |
+| R2 | **Done (8 Nov): `backup.yml` + CI drill, see M8; starts when the owner adds `SUPABASE_DB_URL`.** Original plan: upgrade to a plan with daily backups/PITR, **or** run a scheduled `pg_dump` to private storage; restore once into a scratch project | Owner + engineering | A restore drill is documented, with its date and row counts |
 | R3 | Idempotency: optional `p_request_id uuid` on money-moving RPCs, backed by a unique `(company_id, request_id)` table; the browser sends one per form open | Engineering | Calling twice with the same id returns the first result; a new test in `invariants.sql` |
 | R4 | Custom SMTP, then `email_confirm: false` in `signup` plus a confirm page | Owner (SMTP credentials) + engineering | A new account cannot sign in until it confirms; existing accounts are unaffected |
 | R5 | Live MyInvois sandbox run with the owner's own credentials: one invoice, one credit note, one cancellation | Owner + engineering | Three documents validated in preprod; any LHDN rule errors fixed |
-| R6 | Monorepo before any deployment: encrypt TOTP secrets (M9), re-check membership per request or revoke on role change (M10), MFA e2e fixture (G3) | Engineering | Tests for each; deploy.yml configured with real secrets |
-| R7 | Browser end-to-end test of the live app's main flow (sign in → invoice → receive → reconcile → reports) in CI | Engineering | Playwright job green on every PR |
-| R8 | Load test: 50 concurrent users posting for 10 minutes against a staging Supabase project | Engineering | p95 RPC < 500 ms; 0 numbering gaps; 0 unbalanced entries |
+| R6 | **Monorepo frozen (8 Nov) — not to be deployed.** If it is ever revived: encrypt TOTP secrets (M9), re-check membership per request or revoke on role change (M10), MFA e2e fixture (G3) | Engineering | Tests for each; deploy.yml configured with real secrets |
+| R7 | **Done (8 Nov): CI `e2e` job.** Browser end-to-end test of the live app's main flow (sign in → invoice → receive → reconcile → reports) in CI | Engineering | Playwright job green on every PR |
+| R8 | **Done (8 Nov), free:** 50 concurrent connections for 2 minutes against the CI runner's local Supabase instead of a paid staging project. Load test: 50 concurrent users posting for 10 minutes against a staging Supabase project | Engineering | p95 RPC < 500 ms; 0 numbering gaps; 0 unbalanced entries |
 
 ---
 
@@ -115,10 +115,10 @@ Every row below was **executed** against the hosted database inside a rolled-bac
 
 | ID | Gap |
 |---|---|
-| G1 | No browser end-to-end test of the live app (R7). Its UI is checked by hand against a local stub harness. |
-| G2 | No stress test of concurrent posting (R8). Concurrency safety is by design and was not measured. |
+| G1 | ~~No browser end-to-end test of the live app (R7).~~ **Closed 8 Nov 2026:** CI `e2e` job (Playwright, Chromium, full local Supabase). |
+| G2 | ~~No stress test of concurrent posting (R8).~~ **Closed 8 Nov 2026:** CI load test, 50 connections into one company for 2 minutes; fails on any gap, duplicate, double post, unbalanced entry or p95 > 500 ms. |
 | G3 | No MFA-enrolled fixture in the monorepo e2e harness, so M1 and M2 have no regression test. |
-| G4 | Edge functions (`signup`, `scan-document`, `myinvois`) have no automated tests. Each was exercised by hand. |
+| G4 | ~~Edge functions have no automated tests.~~ **Partly closed 8 Nov 2026:** `e2e/tests/functions.spec.js` covers `signup` (validation, breached password, create once, duplicate, CORS) and that `billing`, `scan-document`, `myinvois` refuse anonymous callers. Their signed-in paths still need fixtures. |
 | G5 | Report reconciliation (P&L result = balance-sheet current-year earnings, period by period) is checked through `books_proof` totals, not per period. |
 
 ---

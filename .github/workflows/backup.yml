@@ -1,0 +1,97 @@
+# Daily backup of the live books (audit M8 / R2) — free, no paid Supabase plan.
+#
+#   1. pg_dump of public, auth, storage and the migration history, plus every
+#      uploaded file when SUPABASE_SERVICE_ROLE_KEY is set;
+#   2. restore drill: the dump is loaded into a fresh database on this runner and
+#      verify.sql proves the ledger balances and every row came back;
+#   3. encrypted with the PUBLIC key in supabase/backup/backup-public-key.asc —
+#      only the owner's private key (kept offline, never in GitHub) can open it;
+#   4. kept as a workflow artifact for 90 days.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL            required — Supabase → Connect → "Session pooler" URI
+#   SUPABASE_SERVICE_ROLE_KEY  optional — also back up uploaded receipts and bills
+# How to restore: supabase/backup/README.md
+name: Daily backup
+
+on:
+  schedule:
+    - cron: "0 19 * * *"   # 03:00 Malaysia time, every day
+  workflow_dispatch:
+  # Also when the backup scripts change on main, so a change is proved against
+  # the live books straight away (and the first backup runs on merge).
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/backup.yml"
+      - "supabase/backup/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secrets
+        env:
+          SRC_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SRC_URL" ]; then
+            echo "::error::No backup was taken: add the SUPABASE_DB_URL secret (Supabase → Connect → Session pooler). See supabase/backup/README.md."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the Supabase CLI
+        run: npm install -g supabase@2.122.1
+
+      - name: Dump the books
+        env:
+          SRC_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: https://qkrikvmkoelusyjjqdkd.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OUT_DIR: ${{ runner.temp }}/backup
+        run: bash supabase/backup/dump.sh
+
+      # Logs of a public repository are public: restore-check.sh prints only
+      # counts and error headlines, never row contents.
+      - name: Restore drill on a scratch database
+        env:
+          ADMIN_URL: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
+          DUMP_DIR: ${{ runner.temp }}/backup
+        run: |
+          supabase db start
+          bash supabase/backup/restore-check.sh
+
+      - name: Encrypt
+        id: enc
+        run: |
+          name="zycount-backup-$(date -u +%Y%m%d-%H%M)"
+          rm -f "$RUNNER_TEMP/backup/restore.log"
+          tar -C "$RUNNER_TEMP/backup" -cf - . \
+            | gpg --batch --yes --trust-model always --recipient-file supabase/backup/backup-public-key.asc \
+                  --compress-algo none --output "$RUNNER_TEMP/$name.tar.gpg" --encrypt
+          rm -rf "$RUNNER_TEMP/backup"
+          ( cd "$RUNNER_TEMP" && sha256sum "$name.tar.gpg" > "$name.sha256" )
+          ls -la "$RUNNER_TEMP/$name".*
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.enc.outputs.name }}
+          path: |
+            ${{ runner.temp }}/${{ steps.enc.outputs.name }}.tar.gpg
+            ${{ runner.temp }}/${{ steps.enc.outputs.name }}.sha256
+          retention-days: 90
+          if-no-files-found: error
+          compression-level: 0

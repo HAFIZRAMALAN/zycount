@@ -17,9 +17,20 @@ This repository holds two implementations. Only the first one is deployed.
 | **Where** | `docs/` (static app) + `supabase/` (Postgres, row-level security, SQL functions, edge functions) | `apps/web` (Next.js) + `apps/api` (NestJS) + `packages/` (Prisma) |
 | **Deployed** | GitHub Pages ([pages.yml](.github/workflows/pages.yml)) on Supabase project `qkrikvmkoelusyjjqdkd` | Not deployed — [deploy.yml](.github/workflows/deploy.yml) runs by hand only and fails until a hosting target is configured |
 | **Modules working on real books** | Accounts, journals, periods, reports, bank reconciliation and statement import, sales and purchases (quotation → invoice → receipt, bills, payments, credit/debit notes, knock-off, contra, aging, statements), cash book, receipt capture, LHDN MyInvois e-Invoice, plans and online payment (Billplz, ToyyibPay or Stripe), the platform API-key register | Phase 1 core; other screens render sample data |
-| **Tested in CI** | `supabase` job — every migration on a fresh database, then [supabase/tests/invariants.sql](supabase/tests/invariants.sql) (accounting invariants, tenant isolation, API-role privileges) | `static` and `accounting-invariants` jobs |
+| **Tested in CI** | `supabase` job — every migration on a fresh database, then [supabase/tests/invariants.sql](supabase/tests/invariants.sql) (accounting invariants, tenant isolation, API-role privileges), a backup → restore drill, and a [load test](supabase/tests/load/run.sh) (50 connections posting into one company). `e2e` job — the app in Chromium against a full local Supabase: sign up → invoice → receive payment → money in → reports → sign back in, plus the edge functions ([e2e/](e2e/)) | `static` and `accounting-invariants` jobs |
+| **Status** | **The product.** All new work happens here. | **Frozen** (8 Nov 2026) — kept as a reference design, not developed further. See below. |
 
 The audit of both is in [audit/2026-10-phase1-audit.md](audit/2026-10-phase1-audit.md).
+
+### Backups (live, free)
+
+[backup.yml](.github/workflows/backup.yml) runs every night at 03:00 Malaysia time: it dumps the books, **restores
+them into a scratch database and proves the ledger balances and every row came back**, then encrypts the dump to
+the public key in [supabase/backup/](supabase/backup/) and keeps it for 90 days. Only the owner's private key, kept
+offline, can open it. Set-up and the restore procedure: [supabase/backup/README.md](supabase/backup/README.md).
+
+Passwords found in public data breaches are refused at sign-up, reset and change (HaveIBeenPwned, k-anonymity —
+only the first 5 characters of the password's SHA-1 hash leave the server or browser).
 
 ### API keys and payment (live)
 
@@ -47,6 +58,11 @@ Money-moving calls (`save_trade_doc`, `record_cash_entry`, `record_transaction`,
 connection never posts twice.
 
 ## Status of the reference monorepo
+
+> **Frozen on 8 November 2026.** Zycount has one accounting engine: the Supabase backend under `supabase/`.
+> The monorepo stays as a reference design and its CI keeps running, but it gets no new features, it must not be
+> deployed (audit R6: M9 and M10 are open), and nothing here should be described to customers as available.
+> A future move to a server-side app would port the SQL functions, not revive this code.
 
 **Phase 1 — Core Accounting: complete.**
 
