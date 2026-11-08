@@ -160,6 +160,61 @@ begin
   if has_function_privilege('anon', 'public.my_companies()', 'EXECUTE') then raise exception 'FAIL: anon can call my_companies'; end if;
   checks := checks + 3;
 
+  -- ── F. Keys, plans and idempotent money calls ─────────────────────────────
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  foreach probe in array array['platform_secrets', 'platform_settings', 'platform_audit', 'idempotency_keys'] loop
+    if has_table_privilege('authenticated', 'public.' || probe, 'SELECT') or has_table_privilege('anon', 'public.' || probe, 'SELECT') then
+      raise exception 'FAIL: API roles can read %', probe;
+    end if;
+    checks := checks + 1;
+  end loop;
+  foreach probe in array array['public._platform_secret(text)', 'public._billing_mark_paid(uuid,numeric,jsonb)', 'public._billing_attach(uuid,text,text)'] loop
+    if has_function_privilege('authenticated', probe, 'EXECUTE') or has_function_privilege('anon', probe, 'EXECUTE') then
+      raise exception 'FAIL: API roles can call %', probe;
+    end if;
+    checks := checks + 1;
+  end loop;
+  begin
+    perform public.platform_secret_set('INVARIANT_KEY', 'not-an-admin');
+    raise exception 'FAIL: a non-admin stored a platform key';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+
+  select count(*) into k from public.subscriptions where company_id in (ca, cb) and status = 'TRIAL';
+  if k <> 1 then raise exception 'FAIL: new business books did not start on a trial, or row-level security showed another company''s plan'; end if;
+  checks := checks + 1;
+
+  -- The same request id posts once; a new id posts again.
+  select id into ex from public.accounts where company_id = ca and type = 'EXPENSE' and is_postable and not is_control order by code limit 1;
+  r := jsonb_build_object('p_company', ca, 'p_kind', 'OUT', 'p_date', current_date, 'p_amount', 7.25, 'p_money_account', cash,
+         'p_other_account', ex, 'p_description', 'idempotency probe', 'p_tax_rate', 0);
+  sv := gen_random_uuid();
+  perform public.idem_call(sv, 'record_transaction', r);
+  perform public.idem_call(sv, 'record_transaction', r);
+  select count(*) into k from public.journal_entries where company_id = ca and description = 'idempotency probe';
+  if k <> 1 then raise exception 'FAIL: a repeated request id posted % times', k; end if;
+  perform public.idem_call(gen_random_uuid(), 'record_transaction', r);
+  select count(*) into k from public.journal_entries where company_id = ca and description = 'idempotency probe';
+  if k <> 2 then raise exception 'FAIL: a new request id did not post'; end if;
+  begin
+    perform public.idem_call(gen_random_uuid(), 'delete_journal', '{}'::jsonb);
+    raise exception 'FAIL: idem_call ran a function outside its list';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 3;
+
+  -- A payment marked paid twice extends the plan once.
+  perform set_config('role', 'postgres', true);
+  insert into public.payments (company_id, plan_code, billing_cycle, amount, gateway, mode, created_by)
+  values (ca, 'STARTER', 'MONTH', 49, 'BILLPLZ', 'SANDBOX', ua) returning id into sv;
+  perform public._billing_mark_paid(sv, 49, '{}'::jsonb);
+  perform public._billing_mark_paid(sv, 49, '{}'::jsonb);
+  select count(*) into k from public.subscriptions
+   where company_id = ca and status = 'ACTIVE' and plan_code = 'STARTER'
+     and current_period_end between now() + interval '27 days' and now() + interval '32 days';
+  if k <> 1 then raise exception 'FAIL: a payment paid twice did not extend the plan exactly one month'; end if;
+  checks := checks + 1;
+
   perform set_config('role', 'postgres', true);
   raise notice 'INVARIANTS PASSED (% checks)', checks;
 end $$;

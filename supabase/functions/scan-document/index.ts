@@ -6,7 +6,8 @@
 // role and the daily allowance before anything is spent, and
 // save_attachment_scan keeps the reading beside the file.
 //
-// Needs the ANTHROPIC_API_KEY secret (Supabase → Edge Functions → Secrets).
+// Needs ANTHROPIC_API_KEY — set in Admin console → Keys & payments (Vault), or as
+// an Edge Function secret (Supabase → Edge Functions → Secrets).
 // Optional: ZYCOUNT_SCAN_MODEL (default claude-opus-5-5), ZYCOUNT_SCAN_EFFORT
 // (default low).
 import Anthropic from "npm:@anthropic-ai/sdk";
@@ -164,7 +165,15 @@ Deno.serve(async (req) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY") || req.headers.get("apikey") || "", {
     global: { headers: { Authorization: auth } }, auth: { persistSession: false },
   });
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  // The key lives in the platform key register (Admin console → Keys & payments),
+  // read with the service role; an Edge Function secret of the same name still works.
+  let key: string | null = null;
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const { data } = await admin.rpc("_platform_secret", { p_name: "ANTHROPIC_API_KEY" });
+    if (typeof data === "string" && data) key = data;
+  } catch { /* fall back to the environment */ }
+  key = key || Deno.env.get("ANTHROPIC_API_KEY") || null;
   if (!key) return fail(503, "AI_NOT_CONFIGURED", "Automatic reading isn't switched on for Zycount yet. Key the details in by hand; the file is kept with the entry.");
 
   const { data: ctx, error: e1 } = await sb.rpc("begin_attachment_scan", { p_id: id });

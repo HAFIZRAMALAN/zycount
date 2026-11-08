@@ -16,10 +16,35 @@ This repository holds two implementations. Only the first one is deployed.
 |---|---|---|
 | **Where** | `docs/` (static app) + `supabase/` (Postgres, row-level security, SQL functions, edge functions) | `apps/web` (Next.js) + `apps/api` (NestJS) + `packages/` (Prisma) |
 | **Deployed** | GitHub Pages ([pages.yml](.github/workflows/pages.yml)) on Supabase project `qkrikvmkoelusyjjqdkd` | Not deployed — [deploy.yml](.github/workflows/deploy.yml) runs by hand only and fails until a hosting target is configured |
-| **Modules working on real books** | Accounts, journals, periods, reports, bank reconciliation and statement import, sales and purchases (quotation → invoice → receipt, bills, payments, credit/debit notes, knock-off, contra, aging, statements), cash book, receipt capture, LHDN MyInvois e-Invoice | Phase 1 core; other screens render sample data |
+| **Modules working on real books** | Accounts, journals, periods, reports, bank reconciliation and statement import, sales and purchases (quotation → invoice → receipt, bills, payments, credit/debit notes, knock-off, contra, aging, statements), cash book, receipt capture, LHDN MyInvois e-Invoice, plans and online payment (Billplz, ToyyibPay or Stripe), the platform API-key register | Phase 1 core; other screens render sample data |
 | **Tested in CI** | `supabase` job — every migration on a fresh database, then [supabase/tests/invariants.sql](supabase/tests/invariants.sql) (accounting invariants, tenant isolation, API-role privileges) | `static` and `accounting-invariants` jobs |
 
 The audit of both is in [audit/2026-10-phase1-audit.md](audit/2026-10-phase1-audit.md).
+
+### API keys and payment (live)
+
+Zycount's service keys are managed in the app, not in the Supabase dashboard: **Admin console → Keys & payments**
+(platform administrators only). Each key goes straight into Supabase Vault; the browser only ever sees its last
+four characters, and the edge functions read the value with the service role (`_platform_secret`). In sandbox mode
+a key named `NAME_SANDBOX` is used before `NAME`; in live mode `NAME_LIVE` first. An Edge Function secret of the same
+name still works as a fallback.
+
+| Key | Used by |
+|---|---|
+| `ANTHROPIC_API_KEY` | `scan-document` — reads receipts, bills and payment slips |
+| `BILLPLZ_API_KEY`, `BILLPLZ_X_SIGNATURE_KEY`, `BILLPLZ_COLLECTION_ID` | `billing` — Billplz (FPX, cards) |
+| `TOYYIBPAY_SECRET_KEY`, `TOYYIBPAY_CATEGORY_CODE` | `billing` — ToyyibPay (FPX, cards) |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | `billing` — Stripe Checkout; webhook `…/functions/v1/billing?hook=stripe` |
+
+Plans (Starter RM49, Business RM99, Pro RM199 a month; yearly = 10 months) live in `public.plans`. New business books
+start on a trial (`billing.trial_days`, default 14); personal books are free. Plan limits apply to users (invites)
+and automatic reads per day. Customers pay from **Plan & billing**; every payment is confirmed with the gateway
+(amount to the cent) before the plan changes, and is written to the books' audit trail. Platform admins can set a
+plan by hand in **Subscriptions** (bank transfer, discount, comp).
+
+Money-moving calls (`save_trade_doc`, `record_cash_entry`, `record_transaction`, `post_contra`,
+`settle_from_bank_line`) go through `idem_call` with a request id, so a double click or a retry after a dropped
+connection never posts twice.
 
 ## Status of the reference monorepo
 
