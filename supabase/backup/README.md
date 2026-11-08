@@ -16,8 +16,10 @@ not once.
 ## One-time set-up (owner)
 
 1. **Database connection.** Supabase dashboard → *Connect* → **Session pooler** → copy the URI
-   (`postgresql://postgres.qkrikvmkoelusyjjqdkd:[YOUR-PASSWORD]@aws-…pooler.supabase.com:5432/postgres`) and put
-   the database password in it. (Forgot it? *Project Settings → Database → Reset database password*.)
+   — for this project it is exactly
+   `postgresql://postgres.qkrikvmkoelusyjjqdkd:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`
+   — and replace `[YOUR-PASSWORD]` (brackets too) with the database password. If the password has `@ : / ? # %`
+   in it, URL-encode those characters (e.g. `@` → `%40`), or reset it to letters and digits only. (Forgot it? *Project Settings → Database → Reset database password*.)
 2. GitHub → repository *Settings → Secrets and variables → Actions → New repository secret*:
    - `SUPABASE_DB_URL` = that URI (**required**)
    - `SUPABASE_SERVICE_ROLE_KEY` = *Project Settings → API keys → service_role* (**optional** — also backs up the

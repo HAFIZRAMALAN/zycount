@@ -48,6 +48,15 @@ jobs:
             echo "::error::No backup was taken: add the SUPABASE_DB_URL secret (Supabase → Connect → Session pooler). See supabase/backup/README.md."
             exit 1
           fi
+          # Shape checks that say what is wrong without printing the secret.
+          bad() { echo "::error::SUPABASE_DB_URL $1 See supabase/backup/README.md."; exit 1; }
+          case "$SRC_URL" in postgresql://*|postgres://*) ;; *) bad "must start with postgresql://";; esac
+          case "$SRC_URL" in *"["*|*"]"*) bad "still has [ or ] — remove the brackets around the password.";; esac
+          at=$(printf '%s' "$SRC_URL" | tr -cd '@' | wc -c)
+          [ "$at" -eq 1 ] || bad "has $at '@' characters; it needs exactly one, right before the host. Write @ inside the password as %40."
+          host="${SRC_URL#*@}"; host="${host%%[:/]*}"
+          case "$host" in *.pooler.supabase.com) ;; *) bad "must use the Session pooler host (…pooler.supabase.com) — GitHub runners can't reach the direct db. address.";; esac
+          echo "Secret looks right: host $host"
 
       - uses: actions/setup-node@v4
         with:
