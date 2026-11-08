@@ -32,9 +32,10 @@ set +e
 pg sh -c 'pg_restore --dbname="$TARGET" --no-comments /in/zycount.dump' > "$DUMP_DIR/restore.log" 2>&1
 rc=$?
 set -e
-errors=$(grep -c "^pg_restore: error" "$DUMP_DIR/restore.log" || true)
-echo "pg_restore exit $rc, $errors errors"
-grep "^pg_restore: error" "$DUMP_DIR/restore.log" | head -20 || true
+# "schema public already exists" is expected: every new database has one.
+errors=$(grep "^pg_restore: error" "$DUMP_DIR/restore.log" | grep -vc 'schema "public" already exists' || true)
+echo "pg_restore exit $rc, $errors unexpected errors"
+grep "^pg_restore: error" "$DUMP_DIR/restore.log" | grep -v 'schema "public" already exists' | cut -c1-200 | head -20 || true
 
 pg sh -c 'psql "$TARGET" -X -v ON_ERROR_STOP=1 -f /sql/verify.sql'
 

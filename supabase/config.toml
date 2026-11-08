@@ -1,5 +1,7 @@
-# Local Supabase for CI (ci.yml → supabase job): applies supabase/migrations to
-# a fresh database and runs supabase/tests/invariants.sql against it.
+# Local Supabase for CI (ci.yml). Two uses:
+#   supabase db start  → database only: migrations, invariants, backup drill, load test
+#   supabase start     → database + auth + API + edge functions, for the browser
+#                        end-to-end tests in e2e/ (the app served from localhost:8767)
 # The hosted project is qkrikvmkoelusyjjqdkd; this file does not configure it.
 project_id = "zycount"
 
@@ -8,7 +10,12 @@ port = 54322
 major_version = 17
 
 [api]
-enabled = false
+enabled = true
+port = 54321
+
+[auth]
+site_url = "http://localhost:8767/login.html"
+additional_redirect_urls = ["http://localhost:8767/**", "http://127.0.0.1:8767/**"]
 
 [studio]
 enabled = false
@@ -20,7 +27,14 @@ enabled = false
 enabled = false
 
 [edge_runtime]
-enabled = false
+enabled = true
 
 [analytics]
 enabled = false
+
+# Same as the hosted project: these do their own auth checks.
+[functions.signup]
+verify_jwt = false
+
+[functions.billing]
+verify_jwt = false

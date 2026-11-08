@@ -29,7 +29,8 @@ begin
   select * into x from zl_load.ctx;
   perform set_config('request.jwt.claims', json_build_object('sub', x.uid, 'role', 'authenticated')::text, true);
   perform set_config('role', 'authenticated', true);
-  a := jsonb_build_object('p_company', x.cid, 'p_post', true,
+  -- Same arguments the browser sends (p_id null = a new document).
+  a := jsonb_build_object('p_company', x.cid, 'p_id', null, 'p_post', true,
          'p_doc', jsonb_build_object('doc_type', 'INVOICE', 'contact_id', x.cu, 'date', current_date),
          'p_lines', jsonb_build_array(jsonb_build_object('description', 'Load', 'qty', 1, 'unit_price', 10.10, 'account_id', x.rev)));
   r1 := public.idem_call(rid, 'save_trade_doc', a);

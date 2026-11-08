@@ -148,6 +148,50 @@ jobs:
           DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" CLIENTS=50 SECONDS_=120 P95_MS=500 \
             bash supabase/tests/load/run.sh
 
+  # Audit R7 + G4: the live app in a real browser (Chromium) against a full
+  # local Supabase — auth, API and the edge functions from supabase/functions.
+  e2e:
+    name: Browser end-to-end and edge functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the Supabase CLI
+        run: npm install -g supabase@2.122.1
+
+      - name: Start Supabase (database, auth, API, edge functions)
+        run: |
+          supabase start -x studio,imgproxy,logflare,vector,supavisor,postgres-meta,realtime,mailpit
+          supabase status -o env | grep -E '^(API_URL|ANON_KEY)=' | sed 's/^API_URL=/SUPA_URL=/; s/^ANON_KEY=/SUPA_ANON=/' | tr -d '"' >> "$GITHUB_ENV"
+
+      - name: Serve the app on localhost:8767
+        run: |
+          python3 -m http.server 8767 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/http.log" 2>&1 &
+          for i in $(seq 1 20); do curl -sf http://localhost:8767/login.html > /dev/null && break; sleep 1; done
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run the tests
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Keep the report when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+
   build:
     name: Build
     runs-on: ubuntu-latest

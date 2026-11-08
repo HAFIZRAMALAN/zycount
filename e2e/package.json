@@ -1,0 +1,11 @@
+{
+  "name": "zycount-e2e",
+  "private": true,
+  "description": "Browser end-to-end tests of the live app (docs/) against a local Supabase (audit R7, G4).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}
