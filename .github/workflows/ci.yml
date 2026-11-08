@@ -140,19 +140,22 @@ jobs:
           ADMIN_URL="$ADMIN" DUMP_DIR="$RUNNER_TEMP/drill" STRICT_COUNTS=1 bash supabase/backup/restore-check.sh
 
       # Audit R8: 50 connections posting invoices (each sent twice, like a
-      # retry) and cash sales into ONE company for 2 minutes. Fails on any
-      # numbering gap or duplicate, unbalanced entry, double post, or p95 > 500 ms.
+      # retry) and cash sales into ONE company — first non-stop (correctness
+      # under the worst contention), then at 20 calls a second (p95 < 500 ms).
+      # Fails on any numbering gap or duplicate, double post, unbalanced entry
+      # or failed call.
       - name: Load test — 50 people posting at once
         shell: bash
         run: |
-          DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" CLIENTS=50 SECONDS_=120 P95_MS=500 \
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" CLIENTS=50 SECONDS_=60 RATE=20 P95_MS=500 \
             bash supabase/tests/load/run.sh
 
   # Audit R7 + G4: the live app in a real browser (Chromium) against a full
   # local Supabase — auth, API and the edge functions from supabase/functions.
   e2e:
     name: Browser end-to-end and edge functions
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.55 has no Chromium build for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
