@@ -399,16 +399,16 @@ begin
   perform set_config('role', 'authenticated', true);
   select id into oe from public.accounts where company_id = ca and code = '1540';
   select id into ce from public.accounts where company_id = ca and code = '1560';
-  r := public.register_asset(ca, jsonb_build_object('name', 'Photocopier', 'cost_account_id', oe, 'acquired_on', make_date(y, 1, 15),
+  r := public.register_asset(ca, jsonb_build_object('name', 'Photocopier', 'cost_account_id', oe, 'acquired_on', make_date(y, 2, 15),
     'cost', 12000, 'method', 'SL', 'life_months', 60, 'post_acquisition', true, 'paid_from_account_id', cash));
   fa1 := (r->>'id')::uuid;
   if (select accum_account_id from public.fixed_assets where id = fa1) <> (select id from public.accounts where company_id = ca and code = '1545')
      or (select expense_account_id from public.fixed_assets where id = fa1) <> (select id from public.accounts where company_id = ca and code = '6540') then
     raise exception 'FAIL: 1540 did not default to 1545 accumulated and 6540 depreciation';
   end if;
-  fa2 := (public.register_asset(ca, jsonb_build_object('name', 'Printer', 'cost_account_id', oe, 'acquired_on', make_date(y, 1, 3),
+  fa2 := (public.register_asset(ca, jsonb_build_object('name', 'Printer', 'cost_account_id', oe, 'acquired_on', make_date(y, 2, 3),
     'cost', 1000, 'method', 'RB', 'rb_rate', 12, 'post_acquisition', true, 'paid_from_account_id', cash))->>'id')::uuid;
-  fa3 := (public.register_asset(ca, jsonb_build_object('name', 'Shredder', 'cost_account_id', oe, 'acquired_on', make_date(y, 1, 31),
+  fa3 := (public.register_asset(ca, jsonb_build_object('name', 'Shredder', 'cost_account_id', oe, 'acquired_on', make_date(y, 2, 28),
     'cost', 100, 'method', 'SL', 'life_months', 3, 'post_acquisition', true, 'paid_from_account_id', cash))->>'id')::uuid;
   checks := checks + 1;
 
@@ -419,16 +419,16 @@ begin
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
   checks := checks + 1;
 
-  -- Straight-line 12,000 / 60 = 200 a month from January; reducing balance 12% a year on 1,000 = 10.00, 9.90, 9.80;
+  -- Straight-line 12,000 / 60 = 200 a month from February (January is closed above); reducing balance 12% a year on 1,000 = 10.00, 9.90, 9.80;
   -- 100 over 3 months = 33.33, 33.33, 33.34 (the last month takes what is left).
-  r := public.depreciation_preview(ca, make_date(y, 3, 31));
+  r := public.depreciation_preview(ca, make_date(y, 4, 30));
   select sum((e->>'amount')::numeric) into n from jsonb_array_elements(r) e;
-  if n <> 729.70 then raise exception 'FAIL: depreciation to March previews % instead of 729.70: %', n, r; end if;
-  dr := public.run_depreciation(ca, make_date(y, 3, 10));
-  if (dr->>'total')::numeric <> 729.70 or (dr->>'period_end')::date <> make_date(y, 3, 31) then raise exception 'FAIL: depreciation run gave %', dr; end if;
+  if n <> 729.70 then raise exception 'FAIL: depreciation to April previews % instead of 729.70: %', n, r; end if;
+  dr := public.run_depreciation(ca, make_date(y, 4, 10));
+  if (dr->>'total')::numeric <> 729.70 or (dr->>'period_end')::date <> make_date(y, 4, 30) then raise exception 'FAIL: depreciation run gave %', dr; end if;
   if (select accumulated from public.fixed_assets where id = fa1) <> 600 or (select accumulated from public.fixed_assets where id = fa2) <> 29.70
      or (select accumulated from public.fixed_assets where id = fa3) <> 100 then
-    raise exception 'FAIL: accumulated depreciation after the March run is wrong';
+    raise exception 'FAIL: accumulated depreciation after the April run is wrong';
   end if;
   select sum(l.debit) - sum(l.credit) into n from public.journal_lines l where l.journal_entry_id = (dr->>'journal_id')::uuid;
   if n <> 0 or (select status from public.journal_entries where id = (dr->>'journal_id')::uuid) <> 'POSTED' then
@@ -439,12 +439,12 @@ begin
   checks := checks + 4;
 
   begin
-    perform public.run_depreciation(ca, make_date(y, 3, 31));
-    raise exception 'FAIL: March was depreciated twice';
+    perform public.run_depreciation(ca, make_date(y, 4, 30));
+    raise exception 'FAIL: April was depreciated twice';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
   begin
-    perform public.run_depreciation(ca, make_date(y, 2, 28));
-    raise exception 'FAIL: February was depreciated again after March';
+    perform public.run_depreciation(ca, make_date(y, 3, 31));
+    raise exception 'FAIL: March was depreciated again after April';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
   checks := checks + 2;
 
@@ -455,12 +455,12 @@ begin
     raise exception 'FAIL: voiding the run did not put the assets back';
   end if;
   if not (public.fixed_asset_gl_check(ca)->>'in_balance')::boolean then raise exception 'FAIL: register and ledger disagree after a void'; end if;
-  dr := public.run_depreciation(ca, make_date(y, 3, 31));
-  if (dr->>'total')::numeric <> 729.70 then raise exception 'FAIL: running March again gave %', dr->>'total'; end if;
+  dr := public.run_depreciation(ca, make_date(y, 4, 30));
+  if (dr->>'total')::numeric <> 729.70 then raise exception 'FAIL: running April again gave %', dr->>'total'; end if;
   checks := checks + 2;
 
-  -- Disposal in April for 11,000: April's 200 first (800 in all), book value 11,200, so a loss of 200.
-  dsp := public.dispose_asset(fa1, jsonb_build_object('date', make_date(y, 4, 10), 'proceeds', 11000, 'money_account_id', cash, 'reason', 'sold'));
+  -- Disposal in May for 11,000: May's 200 first (800 in all), book value 11,200, so a loss of 200.
+  dsp := public.dispose_asset(fa1, jsonb_build_object('date', make_date(y, 5, 10), 'proceeds', 11000, 'money_account_id', cash, 'reason', 'sold'));
   if (dsp->>'gain')::numeric <> -200 or (dsp->>'depreciation')::numeric <> 200 then raise exception 'FAIL: disposal gave %', dsp; end if;
   select sum(l.debit) into n from public.journal_lines l join public.accounts a on a.id = l.account_id
    where l.journal_entry_id = (dsp->>'journal_id')::uuid and a.code = '6720';
@@ -479,10 +479,10 @@ begin
 
   perform public.undo_asset_disposal(fa1, 'wrong price');
   if (select accumulated from public.fixed_assets where id = fa1) <> 600 or (select status from public.fixed_assets where id = fa1) <> 'ACTIVE'
-     or (select depreciated_to from public.fixed_assets where id = fa1) <> make_date(y, 3, 31) then
-    raise exception 'FAIL: undoing the disposal did not put the asset back to March';
+     or (select depreciated_to from public.fixed_assets where id = fa1) <> make_date(y, 4, 30) then
+    raise exception 'FAIL: undoing the disposal did not put the asset back to April';
   end if;
-  dsp := public.dispose_asset(fa1, jsonb_build_object('date', make_date(y, 4, 10), 'proceeds', 12000, 'money_account_id', cash));
+  dsp := public.dispose_asset(fa1, jsonb_build_object('date', make_date(y, 5, 10), 'proceeds', 12000, 'money_account_id', cash));
   select sum(l.credit) into n from public.journal_lines l join public.accounts a on a.id = l.account_id
    where l.journal_entry_id = (dsp->>'journal_id')::uuid and a.code = '4530';
   if (dsp->>'gain')::numeric <> 800 or n is distinct from 800.00 then raise exception 'FAIL: sale above book value gave %, 4530 credit %', dsp, n; end if;
