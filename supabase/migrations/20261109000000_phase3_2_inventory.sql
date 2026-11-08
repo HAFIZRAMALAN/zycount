@@ -943,7 +943,7 @@ begin
                 where c.company_id = p_company group by 1) s on s.acc = a.id
     left join (select l.account_id acc, sum(l.debit - l.credit) b from public.journal_lines l
                  join public.journal_entries e on e.id = l.journal_entry_id
-                where e.company_id = p_company and e.status = 'POSTED' group by 1) g on g.acc = a.id
+                where e.company_id = p_company and e.status <> 'DRAFT' group by 1) g on g.acc = a.id   -- a reversed entry and its reversal both count
    where a.company_id = p_company
      and a.id in (select inventory_account_id from public.items where company_id = p_company and track_stock);
   return jsonb_build_object('accounts', v,

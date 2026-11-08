@@ -235,9 +235,14 @@
     if (id) { ({ doc, lines } = await loadDoc(id)); type = doc.doc_type; }
     const t = T[type];
     const S = SIDE[t.side];
-    const [people, taxes, itemList, accounts, numRows] = await Promise.all([
+    const STOCKY = ["INVOICE", "CASH_SALE", "CREDIT_NOTE", "BILL", "CASH_PURCHASE", "SUPPLIER_CN"].includes(type);
+    const [people, taxes, itemList, accounts, numRows, whs] = await Promise.all([
       contacts(S.kind), taxCodes(), items(), ZL.accounts(), ZL.numbering.load((doc && doc.date) || ZL.today()).catch(() => []),
+      STOCKY && ZL.warehouses ? ZL.warehouses().catch(() => []) : Promise.resolve([]),
     ]);
+    const liveWh = whs.filter((w) => w.is_active);
+    // Warehouse and "goods returned" only matter when a stock item is on the document.
+    const stockWh = liveWh.length > 1, stockRet = type === "CREDIT_NOTE" || type === "SUPPLIER_CN";
     const liveTax = taxes.filter((x) => x.is_active || lines.some((l) => l.tax_code_id === x.id));
     const liveItems = itemList.filter((i) => i.is_active || lines.some((l) => l.item_id === i.id));
     const money = accounts.filter(isMoney);
@@ -265,11 +270,14 @@
         ${f("reference", t.side === "AR" ? (type === "CREDIT_NOTE" || type === "DEBIT_NOTE" ? "Invoice no." : "Customer's PO / ref.") : "Supplier's invoice no.",
           `<input class="zl-input" name="reference" value="${E(d.reference || "")}" maxlength="60" placeholder="${t.side === "AP" && t.posts ? "Checked for duplicates" : "Optional"}">`)}
         ${f("description", "Subject", `<input class="zl-input" name="description" value="${E(d.description || "")}" maxlength="500" placeholder="${type === "CREDIT_NOTE" ? "e.g. Goods returned" : "Optional"}">`, "wide")}
+        ${STOCKY && stockWh ? f("warehouse", t.side === "AR" ? (type === "CREDIT_NOTE" ? "Return stock to" : "Ship stock from") : (type === "SUPPLIER_CN" ? "Return stock from" : "Receive stock into"),
+          `<select class="zl-input" name="warehouse">${liveWh.map((w) => opt(w.id, w.name, d.warehouse_id || (liveWh.find((x) => x.is_default) || liveWh[0]).id)).join("")}</select>`) : ""}
         ${numFields.map((x) => `<label class="zl-field"><span>${E(x.label)}</span>${x.type === "select"
           ? `<select class="zl-input" name="${x.name}">${x.options.map((o) => opt(o.value, o.label, x.value)).join("")}</select>`
           : `<input class="zl-input" name="${x.name}" value="${E(x.value)}">`}</label>`).join("")}
       </div>
       <label class="zl-check" style="margin:12px 0 4px"><input type="checkbox" name="incl"${d.tax_inclusive ? " checked" : ""}><span>Prices include SST</span></label>
+      ${STOCKY && stockRet ? `<label class="zl-check" style="margin:4px 0"><input type="checkbox" name="stock_return"${d.stock_return === false ? "" : " checked"}><span>Goods ${type === "CREDIT_NOTE" ? "came back into" : "went back out of"} stock (stock items only — untick for a price-only credit)</span></label>` : ""}
       <div class="zl-lines-wrap"><table class="zl-lines"><thead><tr>
         <th style="width:130px">Item</th><th style="min-width:240px">Description</th><th style="width:70px" class="r">Qty</th><th style="width:70px">UOM</th>
         <th style="width:105px" class="r">Unit price</th><th style="width:85px" class="r">Discount</th><th style="width:190px">Account</th>
@@ -285,7 +293,10 @@
       const v = (n) => { const el = root.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ""; };
       const pdoc = { doc_type: type, contact_id: v("contact") || null, date: v("date"), reference: v("reference"), description: v("description"),
         notes: v("notes"), tax_inclusive: root.querySelector('[name="incl"]').checked, source_doc_id: d.source_doc_id || null,
-        bill_name: v("bill_name") || null, money_account_id: v("money") || null, pay_method: v("method") || null };
+        bill_name: v("bill_name") || null, money_account_id: v("money") || null, pay_method: v("method") || null,
+        warehouse_id: v("warehouse") || null };
+      const sr = root.querySelector('[name="stock_return"]');
+      if (sr) pdoc.stock_return = sr.checked;
       if (t.effect === 1) pdoc.terms_days = v("terms") === "" ? null : Number(v("terms"));
       if (!t.posts) pdoc.due_date = v("due") || null;
       Object.assign(pdoc, extra);
@@ -1176,6 +1187,7 @@
     const i = it || { uom: "UNIT", is_active: true };
     const accOpts = (side) => [{ value: "", label: "—" }].concat(TYPE_ORDER[side].flatMap((t) => accounts.filter((a) => a.type === t && lineUsable(a)).map((a) => ({ value: a.id, label: `${a.code} · ${a.name}`, group: TYPE_NAME[t] }))));
     const taxOpts = [{ value: "", label: "None" }].concat(taxes.filter((x) => x.is_active).map((x) => ({ value: x.id, label: `${x.code} · ${x.name}` })));
+    const stockAccOpts = (type) => accounts.filter((a) => a.type === type && lineUsable(a)).map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }));
     const r = await ZL.form({ title: it ? `Edit ${it.code}` : "New item or service", wide: true, confirmLabel: it ? "Save" : "Add item",
       fields: [
         { name: "code", label: "Code", required: true, half: true, value: i.code || "", placeholder: "e.g. SVC-01" },
@@ -1188,8 +1200,18 @@
         { name: "sales_tax_code_id", label: "SST on sales", type: "select", half: true, value: i.sales_tax_code_id || "", options: taxOpts },
         { name: "purchase_tax_code_id", label: "SST on purchases", type: "select", half: true, value: i.purchase_tax_code_id || "", options: taxOpts },
         { name: "classification", label: "e-Invoice classification", half: true, value: i.classification || "", placeholder: "e.g. 022 (Others)", hint: "LHDN 3-digit code" },
+        { name: "track_stock", label: "Track stock — count quantities, value them at average cost and post cost of goods sold", type: "checkbox", value: !!i.track_stock },
+        { name: "inventory_account_id", label: "Inventory account", type: "select", half: true,
+          value: i.inventory_account_id || (accounts.find((a) => a.code === "1170") || {}).id || "", options: stockAccOpts("ASSET") },
+        { name: "cogs_account_id", label: "Cost of sales account", type: "select", half: true,
+          value: i.cogs_account_id || (accounts.find((a) => a.code === "5100") || {}).id || "", options: stockAccOpts("COST_OF_SALES") },
         ...(it ? [{ name: "is_active", label: "Active", type: "checkbox", value: i.is_active }] : []),
       ],
+      onOpen: (root) => {
+        const tick = root.querySelector('[name="track_stock"]');
+        const sync = () => ["inventory_account_id", "cogs_account_id"].forEach((n) => { root.querySelector(`[name="${n}"]`).closest("label").hidden = !tick.checked; });
+        tick.addEventListener("change", sync); sync();
+      },
       submit: (v) => ZL.rpc("save_item", { p_company: cid(), p_id: it ? it.id : null, p_data: Object.assign({}, v, {
         sell_price: v.sell_price === "" ? 0 : v.sell_price, buy_price: v.buy_price === "" ? 0 : v.buy_price, is_active: it ? v.is_active : true }) }) });
     if (r) { ZL.toast(it ? "Item saved." : "Item added."); ZL.refresh(); }
@@ -1199,15 +1221,18 @@
     perm: "journal.view",
     business: true,
     async render() {
-      const [list, accounts, taxes] = await Promise.all([items(), ZL.accounts(), taxCodes()]);
+      const [list, accounts, taxes, costs] = await Promise.all([items(), ZL.accounts(), taxCodes(),
+        ZL.select("item_costs", "item_id,qty", (q) => q.eq("company_id", cid()))]);
+      const onHand = new Map(costs.map((c) => [c.item_id, Number(c.qty)]));
       const acc = new Map(accounts.map((a) => [a.id, a])), tx = new Map(taxes.map((x) => [x.id, x]));
       const edit = ZL.can("journal.create");
       return ZL.header("Items & services", "What you sell and buy. Picking an item fills in the description, price, account and SST.",
           edit ? `<button type="button" class="zl-btn primary" id="zl-inew">+ New item</button>` : "") +
         (list.length ? `<section class="card"><div class="tablewrap"><table>
-          <thead><tr><th>Code</th><th>Description</th><th>Unit</th><th class="r">Sell</th><th class="r">Buy</th><th>Sales account</th><th>SST</th><th></th></tr></thead>
+          <thead><tr><th>Code</th><th>Description</th><th>Unit</th><th class="r">Sell</th><th class="r">Buy</th><th class="r">On hand</th><th>Sales account</th><th>SST</th><th></th></tr></thead>
           <tbody>${list.map((i) => `<tr${i.is_active ? "" : ' style="opacity:.6"'}><td class="mono">${E(i.code)}</td><td>${E(i.description)}${i.is_active ? "" : ' <span class="chip">Inactive</span>'}</td>
             <td class="nil">${E(i.uom)}</td><td class="r num">${M(i.sell_price)}</td><td class="r num">${M(i.buy_price)}</td>
+            <td class="r num">${i.track_stock ? `<button type="button" class="zl-ref" data-card="${i.id}">${(onHand.get(i.id) || 0).toLocaleString("en-MY", { maximumFractionDigits: 4 })}</button>` : '<span class="nil">—</span>'}</td>
             <td class="nil">${acc.get(i.sales_account_id) ? E(acc.get(i.sales_account_id).name) : "—"}</td><td class="nil">${tx.get(i.sales_tax_code_id) ? E(tx.get(i.sales_tax_code_id).code) : "—"}</td>
             <td class="r">${edit ? `<button type="button" class="zl-btn sm" data-iedit="${i.id}">Edit</button>` : ""}</td></tr>`).join("")}</tbody></table></div></section>`
           : ZL.empty("No items yet", "Items are optional — you can type any line on a document. Add the ones you use often."));
@@ -1216,6 +1241,7 @@
       const n = root.querySelector("#zl-inew");
       if (n) n.addEventListener("click", () => editItem(null));
       root.querySelectorAll("[data-iedit]").forEach((b) => b.addEventListener("click", async () => { const [it] = await ZL.select("items", "*", (q) => q.eq("id", b.dataset.iedit)); editItem(it); }));
+      root.querySelectorAll("[data-card]").forEach((b) => b.addEventListener("click", () => ZL.open("stockcard", { item: b.dataset.card })));
     },
   });
 
