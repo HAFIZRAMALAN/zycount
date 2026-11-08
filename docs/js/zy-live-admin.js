@@ -331,6 +331,7 @@
         if (a !== b) { errAfter(pw, new ZL.ZLError("VALIDATION", "The two passwords don't match.")); return; }
         busy(pw, true);
         try {
+          if (window.zyPwned && (await window.zyPwned(a)) > 0) throw new ZL.ZLError("VALIDATION", window.ZY_PWNED_MSG);
           const { error } = await ZL.sb.auth.updateUser({ password: a });
           if (error) throw error;
           pw.reset();

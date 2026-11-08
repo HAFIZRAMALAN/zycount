@@ -11,6 +11,8 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:8765",
   "http://localhost:8765",
+  "http://127.0.0.1:8767",
+  "http://localhost:8767",
 ];
 
 function cors(origin: string | null) {
@@ -37,6 +39,30 @@ async function ipHash(ip: string) {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// How many times a password appears in known data breaches (HaveIBeenPwned).
+// k-anonymity: only the first 5 hex characters of its SHA-1 leave the server,
+// so the password itself is never sent. Free, no key. If the service is down
+// it returns -1 and sign-up goes ahead — the format rules still apply.
+async function pwnedCount(password: string): Promise<number> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(password));
+    const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+    const res = await fetch(`https://api.pwnedpasswords.com/range/${hex.slice(0, 5)}`, {
+      headers: { "Add-Padding": "true", "User-Agent": "zycount-signup" },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return -1;
+    const suffix = hex.slice(5);
+    for (const line of (await res.text()).split("\n")) {
+      const [s, n] = line.trim().split(":");
+      if (s === suffix) return Number(n) || 0;
+    }
+    return 0;
+  } catch {
+    return -1;
+  }
+}
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -68,6 +94,12 @@ Deno.serve(async (req) => {
   if (!EMAIL_RE.test(email) || email.length > 254) return reply(origin, 400, { error: "VALIDATION: Enter a valid email address." });
   if (password.length < 8 || password.length > 72 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
     return reply(origin, 400, { error: "VALIDATION: Use 8–72 characters, including a letter and a number." });
+  }
+  // Padded answers have count 0 for decoy rows, so only a real hit counts.
+  if ((await pwnedCount(password)) > 0) {
+    return reply(origin, 400, {
+      error: "VALIDATION: This password has appeared in a data breach elsewhere, so it isn't safe. Choose a different one.",
+    });
   }
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {

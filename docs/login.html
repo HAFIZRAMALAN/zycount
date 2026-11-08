@@ -282,6 +282,7 @@ h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-.015em}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="js/zy-pwned.js"></script>
 <script>
 (function () {
   "use strict";
@@ -574,6 +575,10 @@ h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-.015em}
       try {
         var s = await sb.auth.getSession();
         if (!s.data.session) throw new Error("This reset link has expired or was already used. Ask for a new one.");
+        if (window.zyPwned && (await window.zyPwned(a)) > 0) {
+          busy(btn, false, "Save password and open my books");
+          box.className = "alert err show"; box.textContent = window.ZY_PWNED_MSG; return;
+        }
         var res = await sb.auth.updateUser({ password: a });
         if (res.error) throw res.error;
         var u = s.data.session.user, meta = u.user_metadata || {};

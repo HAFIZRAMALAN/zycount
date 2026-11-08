@@ -125,6 +125,29 @@ jobs:
             -c 'begin' -f supabase/tests/invariants.sql -c 'rollback' 2>&1 | tee invariants.log
           grep -q "INVARIANTS PASSED" invariants.log
 
+      # The same dump → restore → verify scripts the daily backup uses
+      # (.github/workflows/backup.yml), proved here on every pull request.
+      # The invariant suite runs once more and is kept, so there are real
+      # books, documents and sign-ins to back up.
+      - name: Backup and restore drill
+        shell: bash
+        env:
+          ADMIN: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q -v ON_ERROR_STOP=1 \
+            -c 'begin' -f supabase/tests/invariants.sql -c 'commit'
+          SRC_URL="$ADMIN" OUT_DIR="$RUNNER_TEMP/drill" bash supabase/backup/dump.sh
+          ADMIN_URL="$ADMIN" DUMP_DIR="$RUNNER_TEMP/drill" STRICT_COUNTS=1 bash supabase/backup/restore-check.sh
+
+      # Audit R8: 50 connections posting invoices (each sent twice, like a
+      # retry) and cash sales into ONE company for 2 minutes. Fails on any
+      # numbering gap or duplicate, unbalanced entry, double post, or p95 > 500 ms.
+      - name: Load test — 50 people posting at once
+        shell: bash
+        run: |
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" CLIENTS=50 SECONDS_=120 P95_MS=500 \
+            bash supabase/tests/load/run.sh
+
   build:
     name: Build
     runs-on: ubuntu-latest

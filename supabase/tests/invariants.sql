@@ -48,6 +48,17 @@ begin
   if n <> 0 then raise exception 'FAIL: 0.1 + 0.2 did not balance 0.3 exactly'; end if;
   checks := checks + 1;
 
+  -- L1: an amount with a fraction of a sen is refused, not rounded.
+  begin
+    perform public.save_journal(ca, null, current_date, 'sub-cent', null, jsonb_build_array(
+      jsonb_build_object('account_id', cash, 'debit', 0.005, 'credit', 0), jsonb_build_object('account_id', rev, 'debit', 0, 'credit', 0.005)), null);
+    raise exception 'FAIL: a journal with 0.005 was accepted';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%2 decimal places%' then raise exception 'FAIL: sub-cent refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  checks := checks + 1;
+
   begin
     perform public.save_journal(ca, jid, current_date, 'edit', null, jsonb_build_array(
       jsonb_build_object('account_id', cash, 'debit', 5, 'credit', 0), jsonb_build_object('account_id', rev, 'debit', 0, 'credit', 5)), null);
