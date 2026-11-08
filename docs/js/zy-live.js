@@ -46,7 +46,7 @@
     const m = raw.match(/^([A-Z][A-Z_]+):\s*([\s\S]*)$/);
     if (m) return new ZLError(m[1], m[2]);
     if (/Failed to fetch|NetworkError|network|Load failed/i.test(raw)) {
-      return new ZLError("NETWORK", "Can't reach the server. Check your connection — nothing was saved.");
+      return new ZLError("NETWORK", "Can't reach the server. Check your connection and try again — the same entry is never recorded twice.");
     }
     if (/JWT|refresh token|not authenticated/i.test(raw)) return new ZLError("AUTH_REQUIRED", "Your session has expired. Sign in again.");
     return new ZLError("INTERNAL", raw);
@@ -145,16 +145,43 @@
 
   // ── data access ────────────────────────────────────────────────────────
   /** Calls a database function; throws ZLError { code, message } on failure. */
+  // Calls that move money go through idem_call with a request id. The same call
+  // with the same values reuses its id until it gets an answer, so a double click
+  // or a retry after a dropped connection returns the first result instead of
+  // posting twice. A clear answer from the server (success or a refusal) frees it.
+  const ONCE = new Set(["save_trade_doc", "record_cash_entry", "record_transaction", "post_contra", "settle_from_bank_line"]);
+  const inFlight = new Map();
+  const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID()
+    : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)));
   ZL.rpc = async (name, args = {}) => {
+    let fn = name, body = args, fp = null;
+    if (ONCE.has(name)) {
+      fp = name + ":" + JSON.stringify(args);
+      if (!inFlight.has(fp)) inFlight.set(fp, newId());
+      fn = "idem_call";
+      body = { p_request_id: inFlight.get(fp), p_fn: name, p_args: args };
+    }
     try {
-      const { data, error } = await ZL.sb.rpc(name, args);
+      const { data, error } = await ZL.sb.rpc(fn, body);
       if (error) throw error;
+      if (fp) inFlight.delete(fp);
       return data;
     } catch (e) {
       const z = toZLError(e);
+      if (fp && z.code !== "NETWORK" && z.code !== "INTERNAL") inFlight.delete(fp); // refused: nothing was saved
       if (z.code === "AUTH_REQUIRED") ZL.expireSession();
       throw z;
     }
+  };
+
+  /** Calls an edge function; its { error: { code, message } } comes back as a ZLError. */
+  ZL.fn = async (name, body) => {
+    const { data, error } = await ZL.sb.functions.invoke(name, { body });
+    if (!error && data && !data.error) return data;
+    let b = null;
+    try { b = error && error.context && typeof error.context.json === "function" ? await error.context.json() : null; } catch (_) { /* not JSON */ }
+    const x = (b && b.error) || (data && data.error) || {};
+    throw new ZLError(x.code || "NETWORK", x.message || "The server didn't answer. Try again in a moment.");
   };
 
   /** Reads a table (RLS applies). build receives the query builder. */
@@ -546,8 +573,8 @@
       { label: "Purchases", items: [["purchases", "Purchase documents", "truck"], ["suppliers", "Suppliers", "building"], ["apaging", "Payables aging", "clock"]] },
       { label: "Reports", items: [["pl", P ? "Income & spending" : "Profit & loss", "chart"], ["bs", P ? "Net worth" : "Balance sheet", "sheet"], ["tb", "Trial balance", "scale"]] },
       { label: "Accounting", items: [["coa", P ? "Accounts & categories" : "Chart of accounts", "book"], ["journals", "Journals", "list"], ["gl", "General ledger", "ledger"], ["cashbook", "Cash book", "wallet"], ["bankrec", P ? "Match bank statement" : "Bank reconciliation", "bank"], ["periods", "Fiscal periods", "calendar"]] },
-      { label: P ? "Settings" : "Company", items: [["users", P ? "Sharing" : "Users & roles", "users"], ["audit", "Audit trail", "shield"], ["templates", P ? "Receipt template" : "Voucher template", "doc"], ["numbering", "Numbering", "hash"], ["taxcodes", "Tax codes (SST)", "scale"], ["settings", "Settings", "gear"]] },
-      { label: "Zycount", items: [["admin", "Admin console", "key"]] },
+      { label: P ? "Settings" : "Company", items: [["users", P ? "Sharing" : "Users & roles", "users"], ["audit", "Audit trail", "shield"], ["templates", P ? "Receipt template" : "Voucher template", "doc"], ["numbering", "Numbering", "hash"], ["taxcodes", "Tax codes (SST)", "scale"], ["billing", "Plan & billing", "wallet"], ["settings", "Settings", "gear"]] },
+      { label: "Zycount", items: [["admin", "Admin console", "key"], ["adminkeys", "Keys & payments", "key"], ["adminbilling", "Subscriptions", "wallet"]] },
     ];
     NAV.length = 0;
     groups.forEach((g) => {
@@ -1085,6 +1112,7 @@
     renderNav();
     go(state.route);
     inviteToast();
+    if (ZL.billingReturn) ZL.billingReturn();
 
     try {
       if (!sessionStorage.getItem("zl.loggedin")) {
