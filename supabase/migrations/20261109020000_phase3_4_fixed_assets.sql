@@ -170,7 +170,6 @@ declare
   v_name text := btrim(coalesce(p_data->>'name', ''));
 begin
   perform public._require_perm(p_company, 'journal.post');
-  if length(v_name) not between 1 and 200 then raise exception 'VALIDATION: Name the asset.'; end if;
   begin
     v_on := (p_data->>'acquired_on')::date;
     v_cost := round((p_data->>'cost')::numeric, 2);
@@ -195,6 +194,8 @@ begin
     v_on := coalesce(v_on, v_line.date);
     if v_name = '' then v_name := left(v_line.description, 200); end if;
   end if;
+  v_name := btrim(coalesce(v_name, ''));
+  if length(v_name) not between 1 and 200 then raise exception 'VALIDATION: Name the asset.'; end if;
   if v_cost_acc is null then raise exception 'VALIDATION: Choose the asset account (for example 1540 Office Equipment).'; end if;
   select * into v_def from public._asset_defaults(p_company, v_cost_acc);
   v_accum := coalesce(v_accum, v_def.accum_id); v_exp := coalesce(v_exp, v_def.expense_id);
