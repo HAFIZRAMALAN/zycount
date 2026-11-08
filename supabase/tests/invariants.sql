@@ -16,6 +16,7 @@ declare
   it uuid; wh2 uuid; ia uuid; ca2 uuid; q numeric; v numeric;
   it2 uuid; po jsonb; grn jsonb; grn2 jsonb; pl uuid; g1 uuid; g2 uuid; bx jsonb;
   probe text;
+  pj1 uuid; pj2 uuid; pjb uuid;
   y int := extract(year from current_date)::int; fa1 uuid; fa2 uuid; fa3 uuid; fa4 uuid; dr jsonb; dsp jsonb; oe uuid; ce uuid;
 begin
   -- ── Two people, each with their own business books ───────────────────────
@@ -520,6 +521,83 @@ begin
   select count(*) into k from public.fixed_assets where company_id = ca;
   if k <> 0 then raise exception 'FAIL: another company can see % fixed assets', k; end if;
   checks := checks + 3;
+
+  -- ── K. Projects (3.5): tags on lines, P&L by project, closed projects, reversals ─
+  perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  pjb := (public.save_project(cb, null, '{"code":"B-ONLY","name":"Company B project"}'::jsonb)->>'id')::uuid;
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  pj1 := (public.save_project(ca, null, '{"code":"P-ALPHA","name":"Alpha renovation"}'::jsonb)->>'id')::uuid;
+  pj2 := (public.save_project(ca, null, '{"code":"P-BETA","name":"Beta fit-out"}'::jsonb)->>'id')::uuid;
+  begin
+    perform public.save_project(ca, null, '{"code":"p-alpha","name":"Again"}'::jsonb);
+    raise exception 'FAIL: a second project with the same code was saved';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 1;
+
+  -- An invoice for Alpha (whole document), a bill with one line on Beta and one on no project, a journal on Alpha.
+  iv := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'INVOICE', 'contact_id', cu, 'date', current_date, 'project_id', pj1),
+    jsonb_build_array(jsonb_build_object('description', 'Design', 'qty', 1, 'unit_price', 1000, 'account_id', rev)), true);
+  select l.project_id into line from public.journal_lines l where l.journal_entry_id = (iv->>'journal_id')::uuid and l.account_id = rev;
+  if line is distinct from pj1 then raise exception 'FAIL: the invoice''s revenue line is not tagged to its project'; end if;
+  select count(*) into k from public.journal_lines l where l.journal_entry_id = (iv->>'journal_id')::uuid and l.project_id is null;
+  if k <> 1 then raise exception 'FAIL: the receivable line should be the only untagged line, found % untagged', k; end if;
+  bx := public.save_trade_doc(ca, null, jsonb_build_object('doc_type', 'BILL', 'contact_id', su, 'date', current_date, 'reference', 'PJ-B1'),
+    jsonb_build_array(jsonb_build_object('description', 'Tiles', 'qty', 1, 'unit_price', 300, 'account_id', ex, 'project_id', pj2),
+                      jsonb_build_object('description', 'Misc', 'qty', 1, 'unit_price', 50, 'account_id', ex)), true);
+  j := public.save_journal(ca, null, current_date, 'Site labour', null, jsonb_build_array(
+    jsonb_build_object('account_id', ex, 'debit', 200, 'credit', 0, 'project_id', pj1),
+    jsonb_build_object('account_id', cash, 'debit', 0, 'credit', 200)), null);
+  perform public.post_journal((j->>'id')::uuid);
+  select coalesce(sum(case when p2.type = 'REVENUE' then p2.amount else -p2.amount end), 0) into n from public.project_pl(ca, null, null, pj1) p2;
+  if n <> 800 then raise exception 'FAIL: Alpha should show a profit of 800 (1,000 − 200), shows %', n; end if;
+  select coalesce(sum(p2.amount), 0) into n from public.project_pl(ca, current_date, current_date, pj2) p2 where p2.type = 'EXPENSE';
+  if n <> 300 then raise exception 'FAIL: Beta should show 300 of expenses, shows %', n; end if;
+  select coalesce(sum(case when p2.type = 'REVENUE' then p2.amount else -p2.amount end), 0) into n from public.project_pl(ca) p2;
+  select coalesce(sum(case when a.type = 'REVENUE' then l.credit - l.debit else l.debit - l.credit end), 0) into v
+    from public.journal_lines l join public.journal_entries e on e.id = l.journal_entry_id join public.accounts a on a.id = l.account_id
+   where e.company_id = ca and e.status <> 'DRAFT' and a.type in ('REVENUE', 'EXPENSE');
+  if n <> v then raise exception 'FAIL: the project columns add up to % but the P&L is %', n, v; end if;
+  checks := checks + 5;
+
+  -- A closed project takes no new postings; voiding a document on it still reverses exactly.
+  perform public.save_project(ca, pj2, '{"code":"P-BETA","name":"Beta fit-out","status":"CLOSED"}'::jsonb);
+  begin
+    perform public.save_journal(ca, null, current_date, 'late cost', null, jsonb_build_array(
+      jsonb_build_object('account_id', ex, 'debit', 10, 'credit', 0, 'project_id', pj2),
+      jsonb_build_object('account_id', cash, 'debit', 0, 'credit', 10)), null);
+    raise exception 'FAIL: a journal was saved to a closed project';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%closed%' then raise exception 'FAIL: closed project refused for the wrong reason: %', sqlerrm; end if;
+  end;
+  perform public.void_trade_doc((bx->>'id')::uuid, current_date, 'test');
+  select coalesce(sum(p2.amount), 0) into n from public.project_pl(ca, null, null, pj2) p2;
+  if n <> 0 then raise exception 'FAIL: after voiding, the closed project still shows %', n; end if;
+  checks := checks + 2;
+
+  begin
+    perform public.delete_project(pj1);
+    raise exception 'FAIL: a project with postings was deleted';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  begin
+    perform public.save_journal(ca, null, current_date, 'other books', null, jsonb_build_array(
+      jsonb_build_object('account_id', ex, 'debit', 10, 'credit', 0, 'project_id', pjb),
+      jsonb_build_object('account_id', cash, 'debit', 0, 'credit', 10)), null);
+    raise exception 'FAIL: a journal was tagged with another company''s project';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 2;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select count(*) into k from public.projects where company_id = ca;
+  if k <> 0 then raise exception 'FAIL: another company can see % projects', k; end if;
+  begin
+    perform public.project_pl(ca);
+    raise exception 'FAIL: another company read the P&L by project';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  checks := checks + 2;
 
   -- A payment marked paid twice extends the plan once.
   perform set_config('role', 'postgres', true);
