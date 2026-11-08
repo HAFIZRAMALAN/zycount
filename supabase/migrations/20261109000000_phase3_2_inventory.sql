@@ -765,6 +765,14 @@ begin
   return v_id;
 end $$;
 
+/** The books' default warehouse, created the first time stock screens open. Safe to call any number of times. */
+create or replace function public.ensure_warehouse(p_company uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+begin
+  perform public._require_perm(p_company, 'journal.view');
+  return public._default_warehouse(p_company);
+end $$;
+
 create or replace function public.set_stock_settings(p_company uuid, p_allow_negative boolean)
 returns void language plpgsql security definer set search_path = public as $$
 begin
@@ -954,9 +962,9 @@ end $$;
 revoke execute on function public._default_warehouse(uuid), public._warehouse_ok(uuid, uuid),
   public._stock_move(uuid, uuid, uuid, date, numeric, numeric, text, uuid, uuid, uuid, uuid), public._jl(uuid, numeric, text),
   public._stock_on_post(uuid), public._stock_reverse(uuid, uuid, uuid, date, uuid) from public, anon, authenticated;
-revoke execute on function public.save_warehouse(uuid, uuid, jsonb), public.set_stock_settings(uuid, boolean),
+revoke execute on function public.ensure_warehouse(uuid), public.save_warehouse(uuid, uuid, jsonb), public.set_stock_settings(uuid, boolean),
   public.post_stock_adjustment(uuid, jsonb), public.post_stock_transfer(uuid, jsonb), public.void_stock_doc(uuid, date, text),
   public.stock_on_hand(uuid, uuid), public.stock_gl_check(uuid) from public, anon;
-grant execute on function public.save_warehouse(uuid, uuid, jsonb), public.set_stock_settings(uuid, boolean),
+grant execute on function public.ensure_warehouse(uuid), public.save_warehouse(uuid, uuid, jsonb), public.set_stock_settings(uuid, boolean),
   public.post_stock_adjustment(uuid, jsonb), public.post_stock_transfer(uuid, jsonb), public.void_stock_doc(uuid, date, text),
   public.stock_on_hand(uuid, uuid), public.stock_gl_check(uuid) to authenticated;

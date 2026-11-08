@@ -29,8 +29,8 @@
   /** Every set of books gets a default warehouse the first time it is needed. */
   async function ensureWarehouses() {
     let w = await warehouses();
-    if (!w.length && ZL.can("company.edit")) {
-      await ZL.rpc("save_warehouse", { p_company: cid(), p_id: null, p_data: { code: "MAIN", name: "Main store", is_default: true } });
+    if (!w.length) {
+      await ZL.rpc("ensure_warehouse", { p_company: cid() });
       w = await warehouses();
     }
     return w;
