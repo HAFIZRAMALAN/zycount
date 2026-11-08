@@ -19,8 +19,9 @@
   const KIND = {
     PURCHASE: "Purchase", PURCHASE_RETURN: "Return to supplier", SALE: "Sale", SALE_RETURN: "Customer return",
     ADJUSTMENT: "Adjustment", COUNT: "Stock count", OPENING: "Opening stock", TRANSFER: "Transfer", VOID: "Voided",
+    RECEIPT: "Goods received", REVALUE: "Price adjustment",
   };
-  const DOCKIND = { ADJUSTMENT: "Adjustment", COUNT: "Stock count", OPENING: "Opening stock", TRANSFER: "Transfer" };
+  const DOCKIND = { ADJUSTMENT: "Adjustment", COUNT: "Stock count", OPENING: "Opening stock", TRANSFER: "Transfer", RECEIPT: "Goods received" };
 
   const warehouses = () => ZL.select("warehouses", "*", (q) => q.eq("company_id", cid()).order("is_default", { ascending: false }).order("code"));
   const stockItems = () => ZL.select("items", "id,code,description,uom,buy_price,is_active,inventory_account_id",
@@ -272,13 +273,117 @@
       submit: (v) => ZL.rpc("save_warehouse", { p_company: cid(), p_id: w ? w.id : null, p_data: Object.assign({}, v, { is_active: w ? v.is_active : true }) }) });
     if (r) { ZL.toast("Warehouse saved."); ZL.refresh(); }
   }
+  // ── Goods received (Phase 3.3): purchase order → GRN → purchase invoice ──
+  ZL.receiveGoods = async (poId) => {
+    if (!ZL.can("journal.post")) { ZL.toast("Your role can't receive goods.", "bad"); return null; }
+    const [[po], prog, whs] = await Promise.all([
+      ZL.select("trade_docs", "id,doc_no,contact_id,bill_name,warehouse_id,date", (q) => q.eq("id", poId)),
+      ZL.rpc("po_progress", { p_po: poId }), ensureWarehouses()]);
+    const open = prog.filter((p) => Number(p.ordered) - Number(p.received) > 0);
+    if (!open.length) { ZL.toast("Everything on this order has been received.", "bad"); return null; }
+    const live = whs.filter((w) => w.is_active);
+    const def = po.warehouse_id || (live.find((w) => w.is_default) || live[0] || {}).id;
+    const body = `<p class="hint" style="margin:0 0 12px">Enter what actually arrived. Stock goes up now at the order price, and the cost waits in
+        <b>Goods Received Not Invoiced</b> until the supplier's invoice is matched to it.</p>
+      <div class="zl-form">
+        <label class="zl-field half"><span>Date received</span><input class="zl-input" type="date" name="date" value="${E(ZL.today())}"></label>
+        <label class="zl-field half"><span>Into warehouse</span><select class="zl-input" name="wh">${live.map((w) => `<option value="${w.id}"${w.id === def ? " selected" : ""}>${E(w.name)}</option>`).join("")}</select></label>
+        <label class="zl-field half"><span>Delivery order no.</span><input class="zl-input" name="ref" maxlength="60" placeholder="From the supplier's DO"></label>
+        <label class="zl-field half"><span>Note</span><input class="zl-input" name="desc" maxlength="500" placeholder="Optional"></label>
+      </div>
+      <div class="zl-lines-wrap" style="margin-top:10px"><table class="zl-lines"><thead><tr><th>Item</th><th class="r">Ordered</th><th class="r">Received before</th><th class="r" style="width:140px">Received now</th></tr></thead>
+        <tbody>${open.map((p) => `<tr><td>${E(p.description)}</td><td class="r num">${Q(p.ordered)}</td><td class="r num">${Q(p.received)}</td>
+          <td><input class="zl-input num r" data-pl="${p.po_line_id}" data-max="${Number(p.ordered) - Number(p.received)}" inputmode="decimal" value="${Number(p.ordered) - Number(p.received)}" aria-label="Received now"></td></tr>`).join("")}</tbody></table></div>`;
+    let result = null;
+    ZL.modal({ title: `Receive goods — PO ${po.doc_no}`, wide: true, body,
+      actions: [{ label: "Cancel" }, { label: "Post goods received", primary: true, onClick: async ({ root, close }) => {
+        const v = (n) => root.querySelector(`[name="${n}"]`).value.trim();
+        const lines = [...root.querySelectorAll("[data-pl]")].map((i) => {
+          const q = ZL.parseAmount(i.value || "0");
+          if (Number.isNaN(q) || q < 0) throw bad("Quantities must be numbers, zero or more.");
+          if (q > Number(i.dataset.max)) throw bad(`Only ${Q(i.dataset.max)} is still to arrive on one line — receive no more than the order.`);
+          return { po_line_id: i.dataset.pl, qty: q };
+        }).filter((l) => l.qty > 0);
+        if (!lines.length) throw bad("Enter a quantity for at least one line.");
+        result = await ZL.rpc("post_goods_receipt", { p_company: cid(), p_data: { po_id: po.id, date: v("date"), warehouse_id: v("wh"),
+          reference: v("ref") || null, description: v("desc") || null, lines } });
+        close();
+      } }],
+      onClose: () => { if (result) { ZL.toast(`Goods received ${result.doc_no} posted${result.reference ? ` (${result.reference})` : ""}.`); ZL.refresh(); } },
+    });
+  };
+
+  /** Opens a purchase invoice pre-filled with what was received and not yet invoiced. */
+  ZL.invoiceReceived = async (grnId) => {
+    const open = await ZL.rpc("grn_open_lines", { p_company: cid(), p_grn: grnId });
+    if (!open.length) { ZL.toast("Everything received here has been invoiced.", "bad"); return null; }
+    return ZL.tradeEdit("BILL", null, { contact_id: open[0].contact_id, lines: open.map((l) => ({
+      item_id: l.item_id || "", description: l.description, qty: Number(l.open_qty), uom: l.uom || "", unit_price: Number(l.unit_cost),
+      discount: "", account_id: l.account_id, tax_code_id: l.tax_code_id || "", grn_line_id: l.grn_line_id })) });
+  };
+
+  ZL.register("grns", {
+    title: "Goods received",
+    perm: "journal.view",
+    business: true,
+    async render() {
+      const [open, docs, check] = await Promise.all([
+        ZL.rpc("grn_open_lines", { p_company: cid() }),
+        ZL.select("stock_docs", "id,doc_no,date,status,reference,po_id,contact_id,journal_entry_id",
+          (q) => q.eq("company_id", cid()).eq("kind", "RECEIPT").order("created_at", { ascending: false }).limit(200)),
+        ZL.can("report.view") ? ZL.rpc("grni_check", { p_company: cid() }).catch(() => null) : Promise.resolve(null)]);
+      const cIds = [...new Set(docs.map((d) => d.contact_id).filter(Boolean))], pIds = [...new Set(docs.map((d) => d.po_id).filter(Boolean))];
+      const [cs, pos] = await Promise.all([
+        cIds.length ? ZL.select("contacts", "id,name", (q) => q.in("id", cIds)) : [],
+        pIds.length ? ZL.select("trade_docs", "id,doc_no", (q) => q.in("id", pIds)) : []]);
+      const cn = new Map(cs.map((c) => [c.id, c.name])), pn = new Map(pos.map((p) => [p.id, p.doc_no]));
+      const byGrn = new Map();
+      open.forEach((l) => { const g = byGrn.get(l.grn_id) || { id: l.grn_id, no: l.grn_no, date: l.grn_date, po: l.po_no, who: l.contact_name, value: 0, lines: 0 };
+        g.value += ZL.cents(l.open_value); g.lines += 1; byGrn.set(l.grn_id, g); });
+      const openTotal = [...byGrn.values()].reduce((s, g) => s + g.value, 0) / 100;
+      const canInv = ZL.can("journal.create"), canVoid = ZL.can("journal.reverse");
+      const proof = check ? (check.in_balance
+        ? `<div class="zl-banner info" style="margin-bottom:14px">✓ Goods Received Not Invoiced in the ledger (RM ${M(check.gl_balance)}) matches the list below.</div>`
+        : `<div class="zl-banner" style="margin-bottom:14px">GRNI in the ledger is RM ${M(check.gl_balance)} but goods not yet invoiced come to RM ${M(check.open_value)}. A manual journal may have posted to account 2140.</div>`) : "";
+      return ZL.header("Goods received", "Purchase order → goods received → supplier's invoice. Receive from an issued purchase order; match the invoice when it comes.") + proof +
+        `<section class="card"><div class="zl-sec-h"><h3>Received, not yet invoiced</h3><span class="hint">RM ${M(openTotal)}</span></div>` +
+        (byGrn.size ? `<div class="tablewrap"><table><thead><tr><th>GRN</th><th>Date</th><th>Supplier</th><th>PO</th><th class="r">Lines</th><th class="r">Value (RM)</th><th></th></tr></thead>
+          <tbody>${[...byGrn.values()].map((g) => `<tr><td class="mono">${E(g.no)}</td><td class="nil">${ZL.date(g.date)}</td><td>${E(g.who || "")}</td><td class="mono">${E(g.po || "")}</td>
+            <td class="r num">${g.lines}</td><td class="r num">${M(g.value / 100)}</td>
+            <td class="r">${canInv ? `<button type="button" class="zl-btn sm primary" data-ginv="${g.id}">Enter supplier invoice</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+          : `<p class="hint" style="padding:0 16px 16px">Nothing waiting — every delivery has been invoiced.</p>`) + `</section>` +
+        `<section class="card" style="margin-top:16px"><div class="zl-sec-h"><h3>All goods received</h3></div>` +
+        (docs.length ? `<div class="tablewrap"><table><thead><tr><th>GRN</th><th>Date</th><th>Supplier</th><th>PO</th><th>Delivery order</th><th>Status</th><th></th></tr></thead>
+          <tbody>${docs.map((d) => `<tr${d.status === "VOID" ? ' style="opacity:.6"' : ""}><td class="mono">${E(d.doc_no)}</td><td class="nil">${ZL.date(d.date)}</td>
+            <td>${E(cn.get(d.contact_id) || "")}</td><td>${d.po_id ? `<button type="button" class="zl-ref" data-doc="${d.po_id}">${E(pn.get(d.po_id) || "PO")}</button>` : ""}</td>
+            <td>${E(d.reference || "")}</td><td>${d.status === "VOID" ? '<span class="chip">Void</span>' : '<span class="chip ok">Posted</span>'}</td>
+            <td class="r">${d.journal_entry_id ? `<button type="button" class="zl-btn sm ghost" data-open-journal="${d.journal_entry_id}">Journal</button>` : ""}
+              ${canVoid && d.status === "POSTED" ? `<button type="button" class="zl-btn sm ghost" data-gvoid="${d.id}" data-no="${E(d.doc_no)}">Void</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+          : ZL.empty("No goods received yet", "Open an issued purchase order and choose “Receive goods” when the delivery arrives.",
+              `<button type="button" class="zl-btn" onclick="go('purchases')">Purchase documents</button>`)) + `</section>`;
+    },
+    after(root) {
+      root.querySelectorAll("[data-ginv]").forEach((b) => b.addEventListener("click", () => ZL.invoiceReceived(b.dataset.ginv)));
+      root.querySelectorAll("[data-doc]").forEach((b) => b.addEventListener("click", () => ZL.open("tradedoc", { id: b.dataset.doc })));
+      root.querySelectorAll("[data-open-journal]").forEach((b) => b.addEventListener("click", () => ZL.open("journal", { id: b.dataset.openJournal })));
+      root.querySelectorAll("[data-gvoid]").forEach((b) => b.addEventListener("click", async () => {
+        const r = await ZL.form({ title: `Void ${b.dataset.no}`, confirmLabel: "Void", danger: true,
+          intro: "The stock and the GRNI entry are reversed exactly. A delivery that has been invoiced can't be voided until its invoice is.",
+          fields: [{ name: "date", label: "Void date", type: "date", required: true, value: ZL.today() },
+                   { name: "reason", label: "Reason", required: true, placeholder: "e.g. Entered against the wrong order" }],
+          submit: (v) => ZL.rpc("void_stock_doc", { p_id: b.dataset.gvoid, p_date: v.date, p_reason: v.reason }) });
+        if (r) { ZL.toast(`${b.dataset.no} voided.`); ZL.refresh(); }
+      }));
+    },
+  });
+
   ZL.register("warehouses", {
     title: "Warehouses",
     perm: "journal.view",
     business: true,
     async render() {
       const [whs, [co], bal] = await Promise.all([ensureWarehouses(),
-        ZL.select("companies", "allow_negative_stock", (q) => q.eq("id", cid())),
+        ZL.select("companies", "allow_negative_stock,match_price_tolerance", (q) => q.eq("id", cid())),
         ZL.select("stock_balances", "warehouse_id,qty", (q) => q.eq("company_id", cid()))]);
       const units = new Map(); bal.forEach((b) => units.set(b.warehouse_id, (units.get(b.warehouse_id) || 0) + Number(b.qty)));
       const edit = ZL.can("company.edit");
@@ -291,12 +396,25 @@
         <section class="card" style="margin-top:16px;padding:16px">
           <label class="zl-check"><input type="checkbox" id="zl-neg"${co && co.allow_negative_stock ? " checked" : ""}${edit ? "" : " disabled"}>
             <span><b>Allow selling stock you don't have yet</b><br><span class="hint">Off (recommended): an invoice that would take an item below zero is refused, so the cost of sales is always right. Turn on only if you invoice before goods arrive — those sales are costed at the last buying price.</span></span></label>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:16px">
+            <label class="zl-field" style="max-width:220px"><span>Price tolerance for invoice matching (%)</span>
+              <input class="zl-input num" id="zl-tol" inputmode="decimal" value="${E(String(Number((co && co.match_price_tolerance) || 0)))}"${edit ? "" : " disabled"}></label>
+            ${edit ? '<button type="button" class="zl-btn sm" id="zl-tolsave">Save</button>' : ""}
+            <span class="hint" style="flex:1 1 280px">A supplier invoice matched to goods received is stopped when its unit price differs from the order by more than this. 0 = any difference needs confirming.</span>
+          </div>
         </section>`;
     },
     after(root) {
       const n = root.querySelector("#zl-wnew"); if (n) n.addEventListener("click", () => editWarehouse(null));
       root.querySelectorAll("[data-wedit]").forEach((b) => b.addEventListener("click", async () => {
         const [w] = await ZL.select("warehouses", "*", (q) => q.eq("id", b.dataset.wedit)); editWarehouse(w); }));
+      const ts = root.querySelector("#zl-tolsave");
+      if (ts) ts.addEventListener("click", async () => {
+        const v = ZL.parseAmount(root.querySelector("#zl-tol").value);
+        if (Number.isNaN(v) || v < 0 || v > 100) { ZL.toast("Enter a percentage between 0 and 100.", "bad"); return; }
+        try { await ZL.rpc("set_match_tolerance", { p_company: cid(), p_percent: v }); ZL.toast("Tolerance saved."); }
+        catch (e) { ZL.toast(e.message, "bad"); }
+      });
       const neg = root.querySelector("#zl-neg");
       if (neg) neg.addEventListener("change", async () => {
         try { await ZL.rpc("set_stock_settings", { p_company: cid(), p_allow_negative: neg.checked }); ZL.toast("Saved."); }

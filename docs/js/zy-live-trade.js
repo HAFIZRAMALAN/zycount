@@ -251,7 +251,7 @@
     const defaultAcc = (c) => (c && c.default_account_id) || (t.side === "AR" ? (accounts.find((a) => a.code === "4110" && lineUsable(a)) || {}).id || "" : "");
     const blank = () => { const c = cById.get(sel("contact") || d.contact_id); return { item_id: "", description: "", qty: 1, uom: "", unit_price: "", discount: "", account_id: defaultAcc(c), tax_code_id: (c && c.default_tax_code_id) || "" }; };
     let sel = () => "";
-    const rows = lines.length ? lines.map((l) => Object.assign({}, l)) : [];
+    const rows = lines.length ? lines.map((l) => Object.assign({}, l)) : (preset.lines || []).map((l) => Object.assign({}, l));
     const canPost = ZL.can("journal.post");
     const numFields = ZL.numbering.fields(numRows, seriesKind(type), d.money_account_id, { series: d.draft_series_id, no: d.draft_doc_no });
     const f = (n, label, control, cls = "") => `<label class="zl-field ${cls}"><span>${label}</span>${control}</label>`;
@@ -307,7 +307,7 @@
         if (!(q > 0)) throw bad(`Line "${l.description || "?"}": quantity must be more than zero.`);
         if (Number.isNaN(p) || Number.isNaN(di)) throw bad(`Line "${l.description || "?"}": enter prices like 1,250.00.`);
         return { item_id: l.item_id || null, description: l.description, qty: q, uom: l.uom || null, unit_price: p, discount: di || 0,
-          account_id: l.account_id || null, tax_code_id: l.tax_code_id || null };
+          account_id: l.account_id || null, tax_code_id: l.tax_code_id || null, grn_line_id: l.grn_line_id || null };
       });
       if (!plines.length) throw bad("Add at least one line.");
       let num = {};
@@ -322,6 +322,12 @@
     if (canPost) actions.push({ label: t.posts ? "Save & post" : "Save & issue", primary: true, onClick: async ({ root, close, setError }) => {
       try { await finish(await post(root, true), close); }
       catch (e) {
+        if (e.code === "PRICE_VARIANCE") {
+          setError(e);
+          if (await ZL.confirm({ title: "Price differs from the order", message: `${E(e.message)}<br><br>Post it anyway? The difference goes to stock (or cost of sales if already sold).`, confirmLabel: "Post with the difference" }))
+            await finish(await post(root, true, { allow_price_variance: true }), close);
+          return;
+        }
         if (e.code !== "CREDIT_LIMIT") throw e;
         setError(e);
         if (await ZL.confirm({ title: "Over the credit limit", message: `${E(e.message)} Post it anyway?`, confirmLabel: "Post anyway" })) await finish(await post(root, true, { allow_over_limit: true }), close);
@@ -685,6 +691,7 @@
           if (t.effect === 1 && outstanding(d) > 0 && d.doc_type !== "REFUND" && d.doc_type !== "SUPPLIER_REFUND" && can("journal.post"))
             acts.push(btn("data-pay", t.side === "AR" ? "Receive payment" : "Pay", "primary"));
           if (t.effect === -1 && outstanding(d) > 0 && can("journal.post")) acts.push(btn("data-knock", "Knock off"));
+          if (d.doc_type === "PURCHASE_ORDER" && can("journal.post") && ZL.receiveGoods) acts.push(btn("data-grn", "Receive goods", "primary"));
           (CONVERT[d.doc_type] || []).forEach(([to, l]) => { if (can("journal.create")) acts.push(btn(`data-conv="${to}"`, l, d.doc_type === "QUOTATION" || d.doc_type === "PURCHASE_ORDER" ? "primary" : "")); });
           if (can(t.posts ? "journal.reverse" : "journal.create")) acts.push(btn("data-void", "Void", "ghost"));
         }
@@ -702,6 +709,14 @@
         ...(src[0] ? [[t.contra ? (t.side === "AR" ? "Supplier side" : "Customer side") : "From", `<button type="button" class="zl-ref" data-doc="${src[0].id}">${E(T[src[0].doc_type].label)} ${E(src[0].doc_no)}</button>`]] : []),
         ...(conv.length && !t.contra ? [["Turned into", conv.map((c) => `<button type="button" class="zl-ref" data-doc="${c.id}">${E(c.doc_no || "Draft " + T[c.doc_type].label.toLowerCase())}</button>${c.status === "VOID" ? " (void)" : ""}`).join(", ")]] : []),
       ];
+      // Phase 3.3: what an issued purchase order has had received and invoiced.
+      const prog = d.doc_type === "PURCHASE_ORDER" && d.status === "POSTED" ? await ZL.rpc("po_progress", { p_po: d.id }).catch(() => []) : [];
+      const Qn = (n) => Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 4 });
+      const progTable = prog.length ? `<section class="card" style="margin-top:16px"><div class="zl-sec-h"><h3>Received and invoiced</h3>
+          <span class="hint">Three-way match: invoices can't exceed what arrived, and arrivals can't exceed the order.</span></div>
+        <div class="tablewrap"><table><thead><tr><th>Line</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Invoiced</th><th class="r">Still to arrive</th></tr></thead>
+        <tbody>${prog.map((p) => `<tr><td>${E(p.description)}</td><td class="r num">${Qn(p.ordered)}</td><td class="r num">${Qn(p.received)}</td>
+          <td class="r num">${Qn(p.invoiced)}</td><td class="r num">${Number(p.ordered) - Number(p.received) > 0 ? Qn(Number(p.ordered) - Number(p.received)) : '<span class="chip ok">Complete</span>'}</td></tr>`).join("")}</tbody></table></div></section>` : "";
       const allocTable = b.allocs.length ? `<section class="card" style="margin-top:16px"><div class="zl-sec-h"><h3>${t.effect === -1 ? "Applied to" : "Paid / credited by"}</h3></div>
         <div class="tablewrap"><table><thead><tr><th>Document</th><th>Date</th><th class="r">Amount</th><th></th></tr></thead>
         <tbody>${b.allocs.map((a) => `<tr><td><button type="button" class="zl-ref" data-doc="${a.other_id}">${E(a.doc_no)}</button> <span class="hint">${E((T[a.doc_type] || {}).label || "")}</span></td>
@@ -712,7 +727,7 @@
           acts.join("")) + `
         <section class="card"><div class="zl-facts"><div><span>Side</span><b>${ZL.sideTag(t.side)}</b></div>${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${v}</b></div>`).join("")}<div><span>Status</span><b>${statusChip(d)}</b></div></div></section>
         <div data-einv></div>
-        <div class="zl-vwrap" style="margin-top:16px;max-height:none">${html}</div>${allocTable}<div data-attach></div>`;
+        <div class="zl-vwrap" style="margin-top:16px;max-height:none">${html}</div>${progTable}${allocTable}<div data-attach></div>`;
     },
     after(root, ctx) {
       const b = ctx.bundle;
@@ -730,6 +745,7 @@
       on("[data-pdf]", async (el) => { el.disabled = true; try { await ZL.voucherPdf(html(), `${d.doc_no}.pdf`); ZL.toast(`Saved ${d.doc_no}.pdf.`); } catch (e) { ZL.toast(ZL.errorText(e), "bad"); } finally { el.disabled = false; } });
       on("[data-pay]", () => ZL.tradePay(SIDE[t.side].pay, { contact_id: d.contact_id, amount: outstanding(d), apply: { [d.id]: outstanding(d) } }));
       on("[data-knock]", () => knockOff(b));
+      on("[data-grn]", () => ZL.receiveGoods(d.id));
       on("[data-copy]", async () => { try { const id = await ZL.rpc("copy_trade_doc", { p_id: d.id, p_to_type: d.doc_type }); ZL.tradeEdit(d.doc_type, id); } catch (e) { ZL.toast(ZL.errorText(e), "bad"); } });
       on("[data-conv]", async (el) => { try { const id = await ZL.rpc("copy_trade_doc", { p_id: d.id, p_to_type: el.dataset.conv }); ZL.tradeEdit(el.dataset.conv, id); } catch (e) { ZL.toast(ZL.errorText(e), "bad"); } });
       on("[data-void]", () => ZL.form({
