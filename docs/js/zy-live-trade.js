@@ -699,7 +699,7 @@
       return `<div class="zl-crumbs"><button type="button" class="zl-ref" data-back>${t.side === "AR" ? "Sales" : "Purchases"}</button> / ${E(t.label)}</div>` +
         ZL.header(`${b.title || t.label} ${d.doc_no || "(draft)"}`, d.status === "VOID" ? `Voided ${ZL.date(d.void_date)} — ${d.void_reason || ""}` : d.status === "DRAFT" ? "Draft — not in the books until you post it." : `${t.posts ? "Posted" : "Issued"} ${ZL.dateTime(d.posted_at)}`,
           acts.join("")) + `
-        <section class="card"><div class="zl-facts">${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${v}</b></div>`).join("")}<div><span>Status</span><b>${statusChip(d)}</b></div></div></section>
+        <section class="card"><div class="zl-facts"><div><span>Side</span><b>${ZL.sideTag(t.side)}</b></div>${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${v}</b></div>`).join("")}<div><span>Status</span><b>${statusChip(d)}</b></div></div></section>
         <div data-einv></div>
         <div class="zl-vwrap" style="margin-top:16px;max-height:none">${html}</div>${allocTable}<div data-attach></div>`;
     },
@@ -788,8 +788,8 @@
         return ZL.header(side === "AR" ? "Sales" : "Purchases",
             side === "AR" ? "Quotations, invoices, cash sales, notes and receipts — each posts its own double entry." : "Purchase orders, supplier invoices, notes and payments — each posts its own double entry.",
             `<button type="button" class="zl-btn ghost" data-go="${S.list}">${side === "AR" ? "Customers" : "Suppliers"}</button><button type="button" class="zl-btn ghost" data-go="${S.aging}">Aging</button>`) +
-          newRow + `
-          <div class="zl-sumrow"><span>${side === "AR" ? "Customers owe you" : "You owe suppliers"}<b class="num">${M(owed, { symbol: true })}</b></span>
+          ZL.sideBanner(side) + newRow + `
+          <div class="zl-sumrow ${ZL.SIDE_INFO[side].cls}"><span>${side === "AR" ? "Customers owe you" : "You owe suppliers"}<b class="num" style="color:var(--side)">${M(owed, { symbol: true })}</b></span>
             <span>Overdue<b class="num" style="${overdue > 0 ? "color:var(--bad)" : ""}">${M(overdue, { symbol: true })}</b></span>
             <span>${side === "AR" ? "Sales" : "Purchases"} this month (excl. SST)<b class="num">${M(monthNet, { symbol: true })}</b></span></div>
           <div class="toolbar">
@@ -902,8 +902,8 @@
         const list = people.filter((c) => (p.all || c.is_active) && (!term || [c.name, c.code, c.email, c.phone, c.tin].some((x) => String(x || "").toLowerCase().includes(term))));
         const total = ZL.sum(aging, (a) => a.balance);
         return ZL.header(kind === "CUSTOMER" ? "Customers" : "Suppliers", kind === "CUSTOMER" ? "Who you sell to — with their balance, terms and statement." : "Who you buy from — with what you owe them.",
-            ZL.can("journal.create") ? `<button type="button" class="zl-btn primary" id="zl-cnew">+ New ${S.who}</button>` : "") + `
-          <div class="zl-sumrow"><span>${people.filter((c) => c.is_active).length} active ${S.who}s</span><span>${kind === "CUSTOMER" ? "Total owed to you" : "Total you owe"}<b class="num">${M(total, { symbol: true })}</b></span></div>
+            ZL.can("journal.create") ? `<button type="button" class="zl-btn primary" id="zl-cnew">+ New ${S.who}</button>` : "") + ZL.sideBanner(side) + `
+          <div class="zl-sumrow ${ZL.SIDE_INFO[side].cls}"><span>${people.filter((c) => c.is_active).length} active ${S.who}s</span><span>${kind === "CUSTOMER" ? "Total owed to you" : "Total you owe"}<b class="num" style="color:var(--side)">${M(total, { symbol: true })}</b></span></div>
           <div class="toolbar">
             <label class="field in"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
               <input id="zl-cq" type="search" value="${E(p.q || "")}" placeholder="Search name, code, TIN or phone" aria-label="Search"></label>
@@ -1026,7 +1026,7 @@
           (side === "AR" && c.tin && ZL.einvoice ? `<button type="button" class="zl-btn ghost" data-tin title="Ask LHDN whether this TIN matches the registration / IC no.">Check TIN</button>` : "") +
           (canNew ? `<button type="button" class="zl-btn ghost" data-obal>Opening balance</button><button type="button" class="zl-btn" data-new="${side === "AR" ? "INVOICE" : "BILL"}">+ ${side === "AR" ? "Invoice" : "Purchase invoice"}</button>` : "") +
           (canNew && canPay && c.is_active ? `<button type="button" class="zl-btn ghost" data-contra title="Set off against the same party's ${side === "AR" ? "supplier" : "customer"} balance">Contra</button>` : "") +
-          (canPay && c.is_active ? `<button type="button" class="zl-btn primary" data-pay>${S.payLabel}</button>` : "")) + `
+          (canPay && c.is_active ? `<button type="button" class="zl-btn primary" data-pay>${S.payLabel}</button>` : "")) + ZL.sideBanner(side) + `
         <section class="card"><div class="zl-facts">${facts.map(([k, v]) => `<div><span>${E(k)}</span><b>${E(v)}</b></div>`).join("")}</div></section>
         <section class="card" style="margin-top:16px"><div class="zl-sec-h"><h3>Open documents</h3></div>
           ${open.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>No.</th><th>Type</th><th>Due</th><th class="r">Total</th><th class="r">Open</th><th></th></tr></thead>
@@ -1146,7 +1146,7 @@
         const ctl = proof ? proof.accounts.filter((x) => x.side === side) : [];
         const ties = ctl.length && ctl.every((x) => ZL.cents(x.difference) === 0);
         return ZL.header(side === "AR" ? "Receivables aging" : "Payables aging", `Open ${side === "AR" ? "invoices" : "bills"} by days past due, as at ${ZL.date(at)}.`,
-            `<button type="button" class="zl-btn ghost" id="zl-acsv">Export CSV</button>`) + `
+            `<button type="button" class="zl-btn ghost" id="zl-acsv">Export CSV</button>`) + ZL.sideBanner(side, `Columns show how many days past the due date each amount is — ${side === "AR" ? "chase the right-hand columns first" : "pay the right-hand columns first"}.`) + `
           <div class="toolbar"><label class="field"><span class="hint">As at</span><input id="zl-aat" type="date" value="${E(at)}" aria-label="As at"></label>${ZL.applyButton("zl-aapply")}</div>
           ${rows.length ? `<section class="card"><div class="tablewrap"><table>
             <thead><tr><th>${S.Who}</th>${cols.map(([, l]) => `<th class="r">${l}</th>`).join("")}</tr></thead>

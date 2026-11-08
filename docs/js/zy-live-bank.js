@@ -445,7 +445,12 @@
     const settle = !P && ZL.can("journal.create") && typeof ZL.tradePay === "function";
     const hint = (l) => {
       const s = l.status === "UNMATCHED" && sugg.get(l.id);
-      if (!s) return "";
+      if (!s) {
+        if (l.status !== "UNMATCHED" || !can) return "";
+        return `<div class="zl-bsugg zb-why">${l.amount > 0
+          ? (settle ? "Money came in that isn't in your books. A customer paying? <b>Receive</b>. Anything else (interest, a refund, owner's money)? <b>Record</b>." : "Money came in that isn't in your books yet. <b>Record</b> it.")
+          : (settle ? "Money went out that isn't in your books. Paying a supplier's bill? <b>Pay bill</b>. Anything else (fees, rent, wages)? <b>Record</b>." : "Money went out that isn't in your books yet. <b>Record</b> it.")}</div>`;
+      }
       const what = /whole balance/.test(s.why) ? `Clears <b>${E(s.contact_name)}</b>'s balance of RM ${M(s.contact_open)}`
         : `${l.amount > 0 ? "Pays" : "Settles"} <b>${E(s.doc_no)}</b> · ${E(s.contact_name)}`;
       return `<div class="zl-bsugg">💡 ${what} <span class="hint">— ${E(s.why)}</span></div>`;
@@ -454,8 +459,18 @@
       ? `${settle ? `<button type="button" class="zl-btn sm${sugg.has(l.id) ? " primary" : ""}" data-bsettle="${l.id}" title="${l.amount > 0 ? "A customer paid an invoice" : "You paid a supplier's bill"}">${l.amount > 0 ? "Receive" : "Pay bill"}</button> ` : ""}<button type="button" class="zl-btn sm${settle && sugg.has(l.id) ? "" : " primary"}" data-brec="${l.id}">Record</button> <button type="button" class="zl-btn sm" data-bmatch="${l.id}">Match</button> <button type="button" class="zl-btn sm ghost" data-bign="${l.id}">Ignore</button>`
       : `<button type="button" class="zl-btn sm ghost" data-bun="${l.id}">${l.status === "IGNORED" ? "Restore" : "Unmatch"}</button>`;
 
+    const exact = lines.filter((l) => { const s = l.status === "UNMATCHED" && sugg.get(l.id); return s && s.doc_id && ZL.cents(Math.abs(l.amount)) === ZL.cents(s.outstanding); }).length;
+    const step = (no, label, sub, state) => `<li class="zb-step ${state}"><i>${state === "done" ? TICK : no}</i><div><b>${label}</b><span>${sub}</span></div></li>`;
+    const steps = `<ol class="zb-steps">
+      ${step(1, "Upload", `${lines.length} lines read`, "done")}
+      ${step(2, "Match", `${n.MATCHED} matched${exact ? ` · ${exact} ready to accept` : ""}`, n.MATCHED && !exact ? "done" : "now")}
+      ${step(3, "Clear the rest", n.UNMATCHED ? `${n.UNMATCHED} line${n.UNMATCHED === 1 ? "" : "s"} to record, match or ignore` : "Nothing left", n.UNMATCHED ? (exact ? "" : "now") : "done")}
+      ${step(4, "Bank = books", diff == null ? "Balance unknown" : diff === 0 ? "They agree" : `Out by ${M(Math.abs(diff) / 100)}`, diff === 0 && !n.UNMATCHED ? "done" : "")}
+    </ol>`;
     return ZL.header(st.name, `${bankAcc.name} · ${bankAcc.code} — ${ZL.date(st.date_from)} to ${ZL.date(st.date_to)} · ${lines.length} lines`,
-        `${btn("zl-bback", "← Statements", "ghost")}${can && n.UNMATCHED ? btn("zl-ball", `Record all ${n.UNMATCHED}`, "primary") : ""}${can ? btn("zl-brerun", "Match again") : ""}${ZL.can("journal.create") ? btn("zl-bdel", "Delete", "ghost danger") : ""}`) + `
+        `${btn("zl-bback", "← Statements", "ghost")}${can && exact ? btn("zl-baccept", `Accept ${exact} suggestion${exact === 1 ? "" : "s"}`, "primary") : ""}${can && n.UNMATCHED ? btn("zl-ball", `Record all ${n.UNMATCHED}`, exact ? "" : "primary") : ""}${can ? btn("zl-brerun", "Match again") : ""}${ZL.can("journal.create") ? btn("zl-bdel", "Delete", "ghost danger") : ""}`) + `
+      ${ZL.tip("bankrec", "How reconciling works", `Every line on the bank statement should be in your books once. Zycount matches what it can; 💡 marks a likely invoice or bill. Clear the rest — <b>Receive</b> or <b>Pay bill</b> for customers and suppliers, <b>Record</b> for anything else, <b>Ignore</b> if it doesn't belong here. When the difference is 0.00, you're done. ${ZL.term("reconcile", "Why it matters")}`)}
+      ${steps}
       <div class="zl-recon">
         <section class="card" style="padding:18px 22px">
           <div class="hint" style="margin-bottom:6px">Cleared</div>
@@ -525,6 +540,15 @@
       act("[data-bun]", async (b) => { await ZL.rpc("unmatch_bank_line", { p_line: b.dataset.bun }); return true; });
       const all = root.querySelector("#zl-ball");
       if (all) all.addEventListener("click", () => ZL.open("bankreview", { st: p.st }));
+      const accept = root.querySelector("#zl-baccept");
+      if (accept) accept.addEventListener("click", async () => {
+        accept.disabled = true;
+        try {
+          const r = await ZL.rpc("bank_accept_suggestions", { p_statement: p.st });
+          ZL.toast(r.settled ? `${r.settled} line${r.settled === 1 ? "" : "s"} settled against their invoice or bill${r.skipped ? ` · ${r.skipped} left for you to check` : ""}.` : "Nothing could be settled automatically — check each 💡 line.", r.settled ? "ok" : "warn");
+          again();
+        } catch (e) { ZL.toast(ZL.errorText(e), "bad"); accept.disabled = false; }
+      });
       const rerun = root.querySelector("#zl-brerun");
       if (rerun) rerun.addEventListener("click", async () => {
         try { const k = await ZL.rpc("auto_match_statement", { p_statement: p.st }); ZL.toast(k ? `${k} more line${k === 1 ? "" : "s"} matched.` : "No new matches."); again(); }
@@ -547,13 +571,20 @@
   .zl-steps3 b{display:block;margin-bottom:3px;font-weight:600}
   .zl-steps3 span{color:var(--ink-3);font-size:13px}
   .zl-recon{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px;margin-bottom:16px}
+  .zb-steps{list-style:none;margin:0 0 16px;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .zb-step{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card)}
+  .zb-step i{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;background:var(--line-2);color:var(--ink-3)}
+  .zb-step b{display:block;font-size:13px}.zb-step span{font-size:12px;color:var(--ink-3)}
+  .zb-step.done i{background:var(--good,#16a34a);color:#fff}
+  .zb-step.now{border-color:var(--brand)}.zb-step.now i{background:var(--brand);color:#fff}
+  .zb-why{color:var(--ink-3)}
   .zl-bsugg{margin-top:4px;font-size:12.5px;color:var(--ink-2)}
   .zl-bar{height:6px;background:var(--line);border-radius:99px;margin-top:8px;overflow:hidden}
   .zl-bar i{display:block;height:100%;background:var(--good,#16a34a);border-radius:99px}
   .zl-proof{width:100%;border-collapse:collapse}
   .zl-proof td{padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
   .zl-proof tr.zl-sub td{font-weight:600;border-bottom:1.5px solid var(--ink)}
-  @media (max-width:900px){.zl-recon,.zl-steps3{grid-template-columns:1fr}}
+  @media (max-width:900px){.zl-recon,.zl-steps3{grid-template-columns:1fr}.zb-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
   `;
   document.head.appendChild(css);
 
