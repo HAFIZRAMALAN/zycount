@@ -102,11 +102,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pinned: "latest" now resolves to the v3 major release, and an unpinned
-      # lookup fails outright whenever GitHub's release API has a bad minute.
-      - uses: supabase/setup-cli@v1
+      # From npm, not GitHub releases: the platform binary ships as
+      # @supabase/cli-linux-x64, so a GitHub release-download outage (HTTP 504
+      # on PR #24) can't break the job. Pinned below the v3 major release.
+      - uses: actions/setup-node@v4
         with:
-          version: 2.122.1
+          node-version: 20
+      - name: Install the Supabase CLI
+        run: |
+          npm install -g supabase@2.122.1
+          supabase --version
 
       - name: Start a local database and apply every migration
         run: |
