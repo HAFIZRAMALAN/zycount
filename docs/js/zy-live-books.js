@@ -590,13 +590,14 @@
     detail: true,
     async render(ctx) {
       const p = ctx.params;
-      const accounts = await ZL.accounts();
+      const [accounts, projs] = await Promise.all([ZL.accounts(), ZL.projects ? ZL.projects().catch(() => []) : Promise.resolve([])]);
+      JPROJ = projs;
       if (p.isNew || p.copyFrom) {
         if (!ZL.can("journal.create")) return ZL.noAccess("New journal", "journal.create");
         let lines = [], description = "", memo = "";
         if (p.copyFrom) {
           const [src] = await ZL.select("journal_entries", "description,memo", (q) => q.eq("id", p.copyFrom));
-          lines = await ZL.select("journal_lines", "account_id,line_no,description,debit,credit", (q) => q.eq("journal_entry_id", p.copyFrom).order("line_no"));
+          lines = await ZL.select("journal_lines", "account_id,line_no,description,debit,credit,project_id", (q) => q.eq("journal_entry_id", p.copyFrom).order("line_no"));
           if (src) { description = src.description || ""; memo = src.memo || ""; }
         }
         if (p.preset === "opening") description = "Opening balances";
@@ -608,7 +609,7 @@
         return ZL.header("Journal", "") + ZL.empty("Journal not found",
           "It may have been a draft that was deleted, or it belongs to another company.", `<p style="margin-top:12px">${btn("zl-back", "Back to journals")}</p>`);
       }
-      const lines = await ZL.select("journal_lines", "account_id,line_no,description,debit,credit", (q) => q.eq("journal_entry_id", entry.id).order("line_no"));
+      const lines = await ZL.select("journal_lines", "account_id,line_no,description,debit,credit,project_id", (q) => q.eq("journal_entry_id", entry.id).order("line_no"));
       if (entry.status === "DRAFT" && ZL.can("journal.edit")) {
         const numbering = ZL.can("journal.post") ? await ZL.numbering.load(entry.date).catch(() => []) : [];
         return editorHtml(Object.assign({}, entry, { lines, numbering }), accounts);
@@ -639,12 +640,19 @@
     }).join("");
   }
 
+  // Phase 3.5: projects a line can be tagged with (only shown once the books have one).
+  let JPROJ = [];
+  const projCol = () => JPROJ.length > 0;
+  const projSelect = (l, n) => `<select class="zl-input" data-f="project" aria-label="Project, line ${n}"><option value="">—</option>${JPROJ
+    .filter((p) => p.status === "ACTIVE" || p.id === l.project_id).map((p) => `<option value="${p.id}"${p.id === l.project_id ? " selected" : ""}>${E(p.code)}</option>`).join("")}</select>`;
+
   function lineRow(accounts, l, n) {
     const d = ZL.cents(l.debit), c = ZL.cents(l.credit);
     return `<tr data-line>
       <td class="num">${n}</td>
       <td style="min-width:240px"><select class="zl-input" data-f="account" aria-label="Account, line ${n}">${accountOptions(accounts.filter((a) => !a.is_control || a.id === l.account_id), l.account_id)}</select></td>
       <td style="min-width:180px"><input class="zl-input" data-f="description" value="${E(l.description || "")}" placeholder="Line narrative (optional)" aria-label="Narrative, line ${n}" maxlength="500"></td>
+      ${projCol() ? `<td style="width:130px">${projSelect(l, n)}</td>` : ""}
       <td style="width:150px"><input class="zl-input num" data-f="debit" inputmode="decimal" value="${d ? M(d / 100) : ""}" placeholder="0.00" aria-label="Debit, line ${n}"></td>
       <td style="width:150px"><input class="zl-input num" data-f="credit" inputmode="decimal" value="${c ? M(c / 100) : ""}" placeholder="0.00" aria-label="Credit, line ${n}"></td>
       <td style="width:40px"><button type="button" class="iconbtn" data-remove aria-label="Remove line ${n}" title="Remove line">
@@ -670,9 +678,9 @@
         </div>
         ${numFields.length ? `<div class="zl-je-num">${numFields.map((f) => ZL.fieldHtml(f)).join("")}</div>` : ""}
         <div class="tablewrap"><table class="zl-lines">
-          <thead><tr><th style="width:36px">#</th><th>Account</th><th>Narrative</th><th class="r">Debit</th><th class="r">Credit</th><th></th></tr></thead>
+          <thead><tr><th style="width:36px">#</th><th>Account</th><th>Narrative</th>${projCol() ? "<th>Project</th>" : ""}<th class="r">Debit</th><th class="r">Credit</th><th></th></tr></thead>
           <tbody id="zl-lines">${lines.map((l, i) => lineRow(accounts, l, i + 1)).join("")}</tbody>
-          <tfoot><tr><td></td><td colspan="2">${btn("zl-addline", "+ Add line", "sm")}</td>
+          <tfoot><tr><td></td><td colspan="${projCol() ? 3 : 2}">${btn("zl-addline", "+ Add line", "sm")}</td>
             <td class="r num mono" id="zl-tdr">0.00</td><td class="r num mono" id="zl-tcr">0.00</td><td></td></tr></tfoot>
         </table></div>
         <div class="proofrow" id="zl-proof"></div>
@@ -787,7 +795,8 @@
         if (Number.isNaN(d) || Number.isNaN(c)) throw new ZL.ZLError("VALIDATION", `Line ${i + 1}: the amount isn't a number.`);
         if (!d && !c) return;
         if (!account) throw new ZL.ZLError("VALIDATION", `Line ${i + 1}: choose an account.`);
-        lines.push({ account_id: account, description: tr.querySelector('[data-f="description"]').value.trim(), debit: d, credit: c });
+        const pj = tr.querySelector('[data-f="project"]');
+        lines.push({ account_id: account, description: tr.querySelector('[data-f="description"]').value.trim(), debit: d, credit: c, project_id: (pj && pj.value) || null });
       });
       if (!lines.length) throw new ZL.ZLError("VALIDATION", "Enter at least one line with an amount.");
       if (forPost) {
@@ -892,7 +901,7 @@
             const a = acc.get(l.account_id) || { code: "?", name: "Unknown account" };
             return `<tr><td class="nil num">${l.line_no}</td>
               <td>${ZL.can("ledger.view") ? `<button type="button" class="zl-ref" style="color:inherit;font:inherit" data-acc-gl="${l.account_id}"><span class="code mono">${E(a.code)}</span>${E(a.name)}</button>` : `<span class="code mono">${E(a.code)}</span>${E(a.name)}`}</td>
-              <td class="nil">${E(l.description || "")}</td>
+              <td class="nil">${E(l.description || "")}${l.project_id ? ` <span class="hint">· ${E((JPROJ.find((x) => x.id === l.project_id) || {}).code || "project")}</span>` : ""}</td>
               <td class="r">${amt(l.debit)}</td><td class="r">${amt(l.credit)}</td></tr>`;
           }).join("")}</tbody>
           <tfoot><tr><td></td><td colspan="2" style="font-weight:600">Totals</td>

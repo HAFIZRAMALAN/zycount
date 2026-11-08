@@ -236,10 +236,14 @@
     const t = T[type];
     const S = SIDE[t.side];
     const STOCKY = ["INVOICE", "CASH_SALE", "CREDIT_NOTE", "BILL", "CASH_PURCHASE", "SUPPLIER_CN"].includes(type);
-    const [people, taxes, itemList, accounts, numRows, whs] = await Promise.all([
+    const [people, taxes, itemList, accounts, numRows, whs, projs] = await Promise.all([
       contacts(S.kind), taxCodes(), items(), ZL.accounts(), ZL.numbering.load((doc && doc.date) || ZL.today()).catch(() => []),
       STOCKY && ZL.warehouses ? ZL.warehouses().catch(() => []) : Promise.resolve([]),
+      ZL.projects ? ZL.projects().catch(() => []) : Promise.resolve([]),
     ]);
+    // Phase 3.5: one project for the whole document (stored on every line).
+    const curProj = (lines.find((l) => l.project_id) || {}).project_id || preset.project_id || "";
+    const liveProj = projs.filter((p) => p.status === "ACTIVE" || p.id === curProj);
     const liveWh = whs.filter((w) => w.is_active);
     // Warehouse and "goods returned" only matter when a stock item is on the document.
     const stockWh = liveWh.length > 1, stockRet = type === "CREDIT_NOTE" || type === "SUPPLIER_CN";
@@ -270,6 +274,7 @@
         ${f("reference", t.side === "AR" ? (type === "CREDIT_NOTE" || type === "DEBIT_NOTE" ? "Invoice no." : "Customer's PO / ref.") : "Supplier's invoice no.",
           `<input class="zl-input" name="reference" value="${E(d.reference || "")}" maxlength="60" placeholder="${t.side === "AP" && t.posts ? "Checked for duplicates" : "Optional"}">`)}
         ${f("description", "Subject", `<input class="zl-input" name="description" value="${E(d.description || "")}" maxlength="500" placeholder="${type === "CREDIT_NOTE" ? "e.g. Goods returned" : "Optional"}">`, "wide")}
+        ${liveProj.length ? f("project", "Project", `<select class="zl-input" name="project"><option value="">No project</option>${liveProj.map((p) => opt(p.id, `${p.code} · ${p.name}`, curProj)).join("")}</select>`) : ""}
         ${STOCKY && stockWh ? f("warehouse", t.side === "AR" ? (type === "CREDIT_NOTE" ? "Return stock to" : "Ship stock from") : (type === "SUPPLIER_CN" ? "Return stock from" : "Receive stock into"),
           `<select class="zl-input" name="warehouse">${liveWh.map((w) => opt(w.id, w.name, d.warehouse_id || (liveWh.find((x) => x.is_default) || liveWh[0]).id)).join("")}</select>`) : ""}
         ${numFields.map((x) => `<label class="zl-field"><span>${E(x.label)}</span>${x.type === "select"
@@ -294,7 +299,7 @@
       const pdoc = { doc_type: type, contact_id: v("contact") || null, date: v("date"), reference: v("reference"), description: v("description"),
         notes: v("notes"), tax_inclusive: root.querySelector('[name="incl"]').checked, source_doc_id: d.source_doc_id || null,
         bill_name: v("bill_name") || null, money_account_id: v("money") || null, pay_method: v("method") || null,
-        warehouse_id: v("warehouse") || null };
+        warehouse_id: v("warehouse") || null, project_id: v("project") || null };
       const sr = root.querySelector('[name="stock_return"]');
       if (sr) pdoc.stock_return = sr.checked;
       if (t.effect === 1) pdoc.terms_days = v("terms") === "" ? null : Number(v("terms"));
