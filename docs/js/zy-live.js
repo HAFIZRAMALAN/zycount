@@ -463,6 +463,71 @@
     <div class="phead"><div><h1>${ZL.esc(title)}</h1>${sub ? `<p class="sub">${ZL.esc(sub)}</p>` : ""}</div>
       ${actions ? `<div class="zl-actions">${actions}</div>` : ""}</div>`;
 
+  // ── Month groups ─────────────────────────────────────────────────────────
+  /** Long listings fold by Year.Month (like a desktop accounting grid): each
+   *  month is one header row — 2026.11 · count · its figures — and clicking it
+   *  folds that month away. The newest month starts open, older ones closed,
+   *  so ten years of documents stay easy to scan.
+   *  o = { cols, ym: (r) => "YYYY-MM-DD…", row: (r) => "<tr …>…",
+   *        figs: (groupRows) => [[label, value], …], partial: last-group-may-be-cut }
+   */
+  ZL.groupByMonth = (rows, o) => {
+    const order = [];
+    const by = new Map();
+    rows.forEach((r) => {
+      const ym = String(o.ym(r) || "").slice(0, 7);
+      if (!by.has(ym)) { by.set(ym, []); order.push(ym); }
+      by.get(ym).push(r);
+    });
+    if (order.length === 1) return rows.map(o.row).join(""); // one month: a header would just be noise
+    return order.map((ym, i) => {
+      const g = by.get(ym);
+      const [y, m] = ym.split("-");
+      const open = i === 0;
+      const cut = o.partial && i === order.length - 1;
+      const figs = (o.figs ? o.figs(g) : []).filter(([, v]) => v !== "").map(([l, v]) =>
+        `<span>${ZL.esc(l)} <b class="num">${v}</b></span>`).join("");
+      return `<tr class="zl-grp${open ? " open" : ""}" data-grp="${ym}" tabindex="0" role="button" aria-expanded="${open}">
+        <td colspan="${o.cols}"><div class="zl-grp-in"><span class="zl-grp-c" aria-hidden="true"></span>
+          <b class="zl-grp-ym">${y}.${m}</b><span class="zl-grp-m">${MONTHS[+m - 1] || ""} ${y}</span>
+          <span class="zl-grp-n">${g.length}</span>
+          <span class="zl-grp-figs">${figs}${cut ? '<span class="zl-grp-part">shown so far</span>' : ""}</span></div></td></tr>` +
+        g.map((r) => o.row(r).replace(/^\s*<tr/, `<tr data-in="${ym}"${open ? "" : " hidden"}`)).join("");
+    }).join("");
+  };
+  /** Fold / unfold on click or Enter / Space. */
+  ZL.wireGroups = (root) => {
+    root.querySelectorAll(".zl-grp").forEach((h) => {
+      const toggle = () => {
+        const open = !h.classList.contains("open");
+        h.classList.toggle("open", open);
+        h.setAttribute("aria-expanded", String(open));
+        root.querySelectorAll(`[data-in="${h.dataset.grp}"]`).forEach((tr) => { tr.hidden = !open; });
+      };
+      h.addEventListener("click", toggle);
+      h.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } });
+    });
+  };
+  {
+    const gcss = document.createElement("style");
+    gcss.textContent = `
+    .zl-grp td{background:var(--sunk);border-bottom:1px solid var(--line);padding:6px 12px;cursor:pointer}
+    .zl-grp:hover td,.zl-grp:focus-visible td{background:var(--line-2)}
+    .zl-grp:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+    .zl-grp-in{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);min-width:0}
+    .zl-grp-c{width:0;height:0;border-style:solid;border-width:4px 0 4px 6px;border-color:transparent transparent transparent currentColor;flex:none;transition:transform .12s;opacity:.7}
+    .zl-grp.open .zl-grp-c{transform:rotate(90deg)}
+    .zl-grp-ym{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
+    .zl-grp-m{color:var(--ink-3)}
+    .zl-grp-n{padding:1px 8px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:11px;color:var(--ink-2);flex:none}
+    .zl-grp-figs{margin-left:auto;display:flex;gap:16px;color:var(--ink-3);white-space:nowrap}
+    .zl-grp-figs b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+    .zl-grp-part{font-style:italic;font-size:11.5px}
+    @media (max-width:640px){.zl-grp-m,.zl-grp-part{display:none}.zl-grp-figs{gap:10px}}
+    `;
+    document.head.appendChild(gcss);
+  }
+
   // ── routing ────────────────────────────────────────────────────────────
   ZL.register = (route, mod) => { ZL.modules[route] = mod; };
 

@@ -100,6 +100,13 @@ a{color:var(--brand);text-decoration:none}
 .navgrp{margin-bottom:12px}
 .navgrp>span{display:block;padding:4px 8px 3px;font-size:10px;font-weight:600;letter-spacing:.11em;
              text-transform:uppercase;color:var(--rail-ink-2)}
+.navgrp-h{display:flex;align-items:center;justify-content:space-between;width:100%;padding:4px 8px 3px;
+          font-size:10px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--rail-ink-2);
+          border-radius:6px;cursor:pointer;text-align:left}
+.navgrp-h:hover{color:var(--rail-ink)}
+.navgrp-h svg{width:11px;height:11px;flex:none;opacity:.7;transition:transform .12s}
+.navgrp.folded .navgrp-h svg{transform:rotate(-90deg)}
+@media (min-width:901px){.navgrp.folded .navitem{display:none}}
 .navitem{display:flex;align-items:center;gap:9px;width:100%;padding:5.5px 9px;border-radius:6px;
          font-size:13px;color:var(--rail-ink);text-align:left;position:relative;transition:background .12s,color .12s}
 .navitem:hover{background:var(--rail-2);color:#fff}
@@ -266,7 +273,7 @@ tbody tr.click:hover td{background:var(--sunk)}
   .rail-top{padding:10px 14px}
   .nav{display:flex;gap:4px;padding:8px 10px;overflow-x:auto;flex:1}
   .navgrp{margin:0;display:flex;gap:4px}
-  .navgrp>span{display:none}
+  .navgrp>span,.navgrp-h{display:none}
   .navitem{white-space:nowrap}
   .navitem.locked{display:none}
   .rail-foot{display:none}
@@ -1773,16 +1780,32 @@ document.documentElement.setAttribute("data-density", state.density);
 
 if (window.ZYTheme) ZYTheme.mount(document.getElementById("theme"));
 
+function navFolds() { try { return JSON.parse(store.get("zy.navfold", "[]")) || []; } catch { return []; } }
 function renderNav() {
-  document.getElementById("nav").innerHTML = NAV.map((g) => `
-    <div class="navgrp"><span>${g.label}</span>
+  const folded = navFolds();
+  document.getElementById("nav").innerHTML = NAV.map((g) => {
+    // The group holding the page you're on always opens, so the current page never hides.
+    const fold = g.label && folded.includes(g.label) && !g.items.some(([id]) => state.route === id);
+    return `
+    <div class="navgrp${fold ? " folded" : ""}"${g.label ? ` data-navgrp="${g.label}"` : ""}>
+      ${g.label ? `<button type="button" class="navgrp-h" aria-expanded="${!fold}"><span>${g.label}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden><path d="m6 9 6 6 6-6"/></svg></button>` : ""}
       ${g.items.map(([id, label, icon, phase]) => phase
         ? `<div class="navitem locked" title="Wired to the API in phase ${phase}">${ICONS[icon]}<span>${label}</span><span class="phase">P${phase}</span></div>`
         : `<button class="navitem" data-route="${id}"${state.route === id ? ' aria-current="page"' : ""}>${ICONS[icon]}<span>${label}</span></button>`
       ).join("")}
-    </div>`).join("");
+    </div>`; }).join("");
   document.querySelectorAll("[data-route]").forEach((b) =>
     b.addEventListener("click", () => go(b.dataset.route)));
+  document.querySelectorAll(".navgrp-h").forEach((h) => h.addEventListener("click", () => {
+    const grp = h.closest(".navgrp");
+    const fold = !grp.classList.contains("folded");
+    grp.classList.toggle("folded", fold);
+    h.setAttribute("aria-expanded", String(!fold));
+    const label = grp.dataset.navgrp;
+    const now = navFolds().filter((l) => l !== label).concat(fold ? [label] : []);
+    store.set("zy.navfold", JSON.stringify(now));
+  }));
 }
 
 function wire() {
