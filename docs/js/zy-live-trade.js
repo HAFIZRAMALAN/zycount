@@ -838,7 +838,17 @@
           </div>
           ${rows.length ? `<section class="card"><div class="tablewrap"><table>
             <thead><tr><th>Date</th><th>No.</th><th>${S.Who}</th><th>Type</th><th>Due</th><th class="r">Total (RM)</th><th class="r">Open</th><th>Status</th></tr></thead>
-            <tbody>${rows.map((d) => { const t = T[d.doc_type]; return `<tr class="click" data-doc="${d.id}">
+            <tbody>${ZL.groupByMonth(rows, {
+              cols: 8,
+              ym: (d) => d.date,
+              partial: page.count > page.rows.length,
+              figs: (g) => {
+                const live = g.filter((d) => d.status !== "VOID" && d.status !== "DRAFT");
+                const tot = ZL.sum(live, (d) => (sign[d.doc_type] || 0) * ZL.num(d.total));
+                const tax = ZL.sum(live, (d) => (sign[d.doc_type] || 0) * ZL.num(d.tax_total));
+                return [["Total", M(tot)], ["SST", tax ? M(tax) : ""]];
+              },
+              row: (d) => { const t = T[d.doc_type]; return `<tr class="click" data-doc="${d.id}">
               <td class="nil" style="white-space:nowrap">${ZL.date(d.date)}</td>
               <td style="white-space:nowrap"><b class="mono">${E(d.doc_no || "Draft")}</b>${d.reference ? `<div class="hint">${E(d.reference)}</div>` : ""}</td>
               <td>${E(cName.get(d.contact_id) || d.bill_name || "Cash customer")}${d.description ? `<div class="hint">${E(d.description)}</div>` : ""}</td>
@@ -846,7 +856,8 @@
               <td class="nil" style="white-space:nowrap">${t.effect === 1 && d.due_date ? ZL.date(d.due_date) : "—"}</td>
               <td class="r">${amtCell(d)}</td>
               <td class="r num">${d.status === "POSTED" && t.posts && t.effect !== 0 && outstanding(d) > 0 ? M(outstanding(d)) : "—"}</td>
-              <td>${statusChip(d)}</td></tr>`; }).join("")}</tbody></table></div>
+              <td>${statusChip(d)}</td></tr>`; },
+            })}</tbody></table></div>
             ${page.count > page.rows.length ? `<div class="proofrow"><span>Showing ${page.rows.length} of ${page.count}.</span><span class="figs"><button type="button" class="zl-btn sm" id="zl-smore">Load 100 more</button></span></div>` : ""}
           </section>` : ZL.empty(term || want || st || p.from || p.to ? "Nothing matches" : `No ${side === "AR" ? "sales" : "purchase"} documents yet`,
             term || want || st || p.from || p.to ? "Try another search, type or date range." : side === "AR"
@@ -858,6 +869,7 @@
         root.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => (T[b.dataset.new].lines ? ZL.tradeEdit(b.dataset.new) : ZL.tradePay(b.dataset.new))));
         root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
         root.querySelectorAll("tr[data-doc]").forEach((tr) => tr.addEventListener("click", () => ZL.open("tradedoc", { id: tr.dataset.doc, side })));
+        ZL.wireGroups(root);
         const q = root.querySelector("#zl-sq");
         q.addEventListener("input", ZL.debounce(() => ZL.open(S.route, Object.assign({}, p, { q: q.value, focus: "q" })), 400));
         if (p.focus === "q") { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }

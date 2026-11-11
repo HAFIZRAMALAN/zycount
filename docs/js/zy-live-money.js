@@ -394,14 +394,24 @@
         </div>
         ${rows.length ? `<section class="card"><div class="tablewrap"><table>
           <thead><tr><th>Date</th><th>Description</th><th>${P ? "Account" : "Bank / cash"}</th><th>${P ? "Category" : "Category"}</th><th class="r">Amount</th><th>${P ? "Journal" : "Voucher"}</th></tr></thead>
-          <tbody>${rows.map((r) => `<tr class="click" data-open-journal="${r.id}">
+          <tbody>${ZL.groupByMonth(rows, {
+            cols: 6,
+            ym: (r) => r.date,
+            partial: page.count > page.rows.length,
+            figs: (g) => {
+              const inS = ZL.sum(g.filter((r) => counts(r) && r.c.kind === "IN"), (r) => r.total_debit);
+              const outS = ZL.sum(g.filter((r) => counts(r) && r.c.kind === "OUT"), (r) => r.total_debit);
+              return [["In", inS ? "+" + M(inS) : ""], ["Out", outS ? "−" + M(outS) : ""]];
+            },
+            row: (r) => `<tr class="click" data-open-journal="${r.id}">
             <td class="nil" style="white-space:nowrap">${ZL.date(r.date)}</td>
             <td><div style="font-weight:500">${E(r.description || "—")}</div>${r.party || r.memo ? `<div class="hint">${E([r.party, r.memo].filter(Boolean).join(" · "))}</div>` : ""}</td>
             <td>${r.c.kind === "TRANSFER" ? `${name(r.c.money)} → ${name(r.c.other)}` : name(r.c.money)}</td>
             <td class="nil">${r.c.kind === "TRANSFER" ? "Transfer" : r.c.kind === "REVERSAL" ? "Reversal" : name(r.c.other)}</td>
             <td class="r" style="white-space:nowrap${counts(r) ? "" : ";text-decoration:line-through;opacity:.6"}" title="${counts(r) ? "" : "Cancelled by a reversal; not counted"}">${amount(r)}</td>
             <td style="white-space:nowrap">${r.doc_no ? `<button type="button" class="zl-ref" data-voucher="${r.id}" title="Open, print or save as PDF">${E(r.doc_no)}</button><div class="hint">${E(r.reference || "")}</div>`
-              : `<span class="zl-ref">${E(r.reference || "")}</span>`}${r.status === "REVERSED" ? ' <span class="chip warn">Reversed</span>' : ""}</td></tr>`).join("")}</tbody>
+              : `<span class="zl-ref">${E(r.reference || "")}</span>`}${r.status === "REVERSED" ? ' <span class="chip warn">Reversed</span>' : ""}</td></tr>`,
+          })}</tbody>
         </table></div>
         ${page.count > page.rows.length ? `<div class="proofrow"><span>Showing the latest ${page.rows.length} of ${page.count}.</span><span class="figs"><button type="button" class="zl-btn sm" id="zl-tmore">Load 100 more</button></span></div>` : ""}
         </section>`
@@ -428,6 +438,7 @@
       const tclear = root.querySelector("#zl-tclear");
       if (tclear) tclear.addEventListener("click", () => ZL.open("transactions", Object.assign({}, p, { from: null, to: null, focus: null })));
       root.querySelectorAll("[data-voucher]").forEach((b) => b.addEventListener("click", (ev) => { ev.stopPropagation(); ZL.voucher(b.dataset.voucher); }));
+      ZL.wireGroups(root);
       ZL.wireJournalLinks(root);
     },
   });

@@ -517,13 +517,19 @@
         </div>
         ${rows.length ? `<section class="card"><div class="tablewrap"><table>
           <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Status</th><th class="r">Amount</th><th>By</th></tr></thead>
-          <tbody>${rows.map((e) => `<tr class="click" data-open-journal="${e.id}">
+          <tbody>${ZL.groupByMonth(rows, {
+            cols: 6,
+            ym: (e) => e.date,
+            partial: count > rows.length,
+            figs: (g) => [["Posted", M(ZL.sum(g.filter((e) => e.status === "POSTED"), (e) => e.total_debit))]],
+            row: (e) => `<tr class="click" data-open-journal="${e.id}">
             <td class="nil" style="white-space:nowrap">${ZL.date(e.date)}</td>
             <td style="white-space:nowrap">${refCell(e)}</td>
             <td class="trunc"><span style="font-weight:500">${E(e.description || "—")}</span> <span class="hint">· ${nice(e.source)}</span>${e.reversal_of_id ? ' <span class="chip">Reversal</span>' : ""}</td>
             <td>${statusChip(e.status)}</td>
             <td class="r num" style="font-weight:600">${M(e.total_debit)}</td>
-            <td class="nil" style="white-space:nowrap">${E(people[e.created_by] || "—")}</td></tr>`).join("")}</tbody>
+            <td class="nil" style="white-space:nowrap">${E(people[e.created_by] || "—")}</td></tr>`,
+          })}</tbody>
         </table></div>
         ${count > rows.length ? `<div class="proofrow"><span>Showing the latest ${rows.length} of ${count}.</span><span class="figs">${btn("zl-jmore", "Load 100 more", "sm")}</span></div>` : ""}
         </section>`
@@ -554,6 +560,7 @@
       if (more) more.addEventListener("click", () => ZL.open("journals", Object.assign({}, p, { limit: (p.limit || 100) + 100, focus: null })));
       const csv = root.querySelector("#zl-jcsv");
       if (csv) csv.addEventListener("click", () => exportJournals(p));
+      ZL.wireGroups(root);
       wireJournalLinks(root);
     },
   });
